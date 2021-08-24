@@ -1,0 +1,185 @@
+#!/usr/bin/env perl
+
+use strict; use warnings;
+use v5.12;
+use YAML::PP;
+use YAML;
+use Tie::IxHash;
+use XXX;
+
+my $data;
+my %name2num;
+my %num2name;
+my %name2refs;
+my %name2ebnf;
+my %lookup;
+
+sub main {
+    die "usage: $0 <rule-or-cmd> [<grammar-file>]"
+        unless @_ >= 1 and @_ <=2;
+    my ($rule, $yaml_file) = @_;
+    get_grammar($yaml_file);
+
+    if ($rule eq 'all') {
+        show_all(1);
+    }
+    elsif ($rule eq 'refs') {
+        show_all();
+    }
+    elsif ($rule eq 'xxx') {
+    }
+    elsif (exists $data->{$rule}) {
+        show_rule($rule);
+    }
+    else {
+        die "Invalid rule '$rule'";
+    }
+}
+
+sub show_all {
+    my ($orig) = @_;
+    $YAML::SortKeys = 0;
+    my %all;
+    tie %all, 'Tie::IxHash';
+    for my $num (sort keys %num2name) {
+        my $name = $num2name{$num};
+        my $refs = $name2refs{$name};
+        if ($orig) {
+            unshift @$refs, {$num => $name2ebnf{$name}};
+        }
+        $all{$name} = $refs;
+    }
+    print YAML::Dump \%all;
+}
+
+sub get_grammar {
+    my ($file) = @_;
+    my $fh;
+    if ($file) {
+        open $fh, $file or die $!;
+    }
+    else {
+        $fh = \*STDIN;
+    }
+    my $yaml = do {local $/; <$fh>};
+    close $fh;
+    $data = YAML::PP::Load $yaml;
+
+    make_name2ebnf($yaml);
+    make_name2num();
+    make_name2refs();
+}
+
+sub make_name2ebnf {
+    ($_) = @_;
+    while (s/[\s\S]*?\n:\d{3}:\s+(\S+)\n((?:#.*\n)+)//) {
+        my ($name, $ebnf) = ($1, $2);
+        $ebnf =~ s/^#\ //mg;
+        $name2ebnf{$name} = $ebnf;
+    }
+}
+
+sub make_name2num {
+    for my $k (sort keys %$data) {
+        if ($k =~ /^:(\d{3})$/) {
+            my $num = $1;
+            my $name = $data->{$k};
+            $name2num{$name} = $num;
+            $num2name{$num} = $name;
+        }
+    }
+}
+
+sub make_name2refs {
+    for my $name (sort keys %$data) {
+        if ($name !~ /^:(\d{3})$/) {
+            my $body = $data->{$name};
+            my $refs = [];
+            find_refs($body, $refs);
+#             WWW [$name, $body] unless @$refs;
+            $name2refs{$name} = $refs;
+        }
+    }
+}
+
+use Carp;
+my $h = "[0-9a-fA-F]";
+sub find_refs {
+    my ($body, $refs, $done) = (@_, {});
+    my $type = ref($body) || 'SCALAR';
+    if ($type eq 'SCALAR') {
+        push @$refs, $body unless $done->{$body}++;
+    }
+    elsif ($type eq 'ARRAY') {
+        if (@$body == 2 and
+            (my $x = $body->[0]) =~ /^x$h$h$/ and
+            (my $y = $body->[1]) =~ /^x$h$h$/
+        ) {
+            my $z = "$x-$y";
+            push @$refs, $z unless $done->{$z}++;
+        }
+        else {
+            for my $elem (@$body) {
+                find_refs($elem, $refs, $done);
+            }
+        }
+    }
+    elsif ($type eq 'HASH') {
+        for my $k (sort keys %$body) {
+            my $v = $body->{$k};
+            if ($k =~ /^\((any|all|\+\+\+|\*\*\*|\?\?\?|\{\w\})\)$/) {
+                find_refs($v, $refs, $done);
+            }
+            elsif ($k =~ /^\((\.\.\.|flip|if|set|max|exclude|\+|===|!==|<<<|<==|m>0|->m)\)$/) {;}
+            elsif ($k eq '(case)') {
+                for my $k2 (sort keys %$v) {
+                    next if $k2 eq 'var';
+                    find_refs($v->{$k2}, $refs, $done);
+                }
+            }
+            elsif ($v =~ /^[nc]$/ or plus($v)) {
+                push @$refs, $k unless $done->{$k}++;
+            }
+            elsif ($k eq '(---)') {
+                my @v = @$v;
+                my $name = shift @v;
+                push @$refs, $name unless $done->{$name}++;
+                push @$refs, [@v];
+            }
+            elsif (ref($v) eq 'ARRAY') {
+                if (grep { defined($_) and /^[ntc]$/ } @$v) {
+                    push @$refs, $k unless $done->{$k}++;
+                }
+            }
+            elsif (not ref($v)) {
+                push @$refs, $k unless $done->{$k}++;
+            }
+            elsif ($k =~ /^\w/) {
+                push @$refs, $k unless $done->{$k}++;
+            }
+            else {
+                WWW ['HASH', $k, $v];
+            }
+        }
+    }
+    else {
+        XXX ['HUH?', $body];
+    }
+}
+
+sub plus {
+    my ($node) = @_;
+    my $type = ref($node) || return;
+    if ($type eq 'HASH') {
+        for my $k (keys %$node) {
+            return 1 if $k eq '(+)';
+        }
+    }
+    elsif ($type eq 'ARRAY') {
+        for my $e (@$node) {
+            return 1 if plus($e);
+        }
+    }
+}
+
+main @ARGV;
