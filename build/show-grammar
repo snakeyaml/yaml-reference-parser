@@ -3,8 +3,6 @@
 use strict; use warnings;
 use v5.12;
 use YAML::PP;
-use YAML;
-use Tie::IxHash;
 use XXX;
 
 my $data;
@@ -37,19 +35,29 @@ sub main {
 }
 
 sub show_all {
+    use YAML::PP::Common qw{
+        PRESERVE_ORDER
+        YAML_FLOW_MAPPING_STYLE
+    };
+    my $yp = YAML::PP->new(
+        preserve => PRESERVE_ORDER
+    );
+
+    my $all = $yp->preserved_mapping({}, style => YAML_FLOW_MAPPING_STYLE);
+
     my ($orig) = @_;
-    $YAML::SortKeys = 0;
-    my %all;
-    tie %all, 'Tie::IxHash';
     for my $num (sort keys %num2name) {
         my $name = $num2name{$num};
         my $refs = $name2refs{$name};
         if ($orig) {
             unshift @$refs, {$num => $name2ebnf{$name}};
         }
-        $all{$name} = $refs;
+        $all->{$name} = $refs;
     }
-    print YAML::Dump \%all;
+    my $yaml = $yp->dump_string($all);
+    $yaml =~ s/^---\n//;
+    $yaml =~ s/\n(\w)/\n\n$1/g;
+    print $yaml;
 }
 
 sub get_grammar {
