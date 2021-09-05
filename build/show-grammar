@@ -3,6 +3,10 @@
 use strict; use warnings;
 use v5.12;
 use YAML::PP;
+use YAML::PP::Common qw{
+    PRESERVE_ORDER
+    YAML_FLOW_MAPPING_STYLE
+};
 use XXX;
 
 my $data;
@@ -10,35 +14,36 @@ my %name2num;
 my %num2name;
 my %name2refs;
 my %name2ebnf;
-my %lookup;
+my %seen;
 
 sub main {
     die "usage: $0 <rule-or-cmd> [<grammar-file>]"
         unless @_ >= 1 and @_ <=2;
-    my ($rule, $yaml_file) = @_;
+    my ($action, $yaml_file) = @_;
     get_grammar($yaml_file);
 
-    if ($rule eq 'all') {
-        show_all(1);
+    if ($action eq 'all') {
+        my $all = format();
+        show_all($all, 1);
     }
-    elsif ($rule eq 'refs') {
+    elsif ($action eq 'refs') {
+        my $format();
         show_all();
     }
-    elsif ($rule eq 'xxx') {
+    elsif ($action eq 'xxx') {
     }
-    elsif (exists $data->{$rule}) {
-        show_rule($rule);
+    elsif (my $body = $data->{$action}) {
+        my $name = $action;
+        my $tree = {};
+        expand($name, $tree);
+        show($tree);
     }
     else {
-        die "Invalid rule '$rule'";
+        die "Invalid action '$action'";
     }
 }
 
-sub show_all {
-    use YAML::PP::Common qw{
-        PRESERVE_ORDER
-        YAML_FLOW_MAPPING_STYLE
-    };
+sub format {
     my $yp = YAML::PP->new(
         preserve => PRESERVE_ORDER
     );
@@ -54,6 +59,9 @@ sub show_all {
         }
         $all->{$name} = $refs;
     }
+}
+
+sub show {
     my $yaml = $yp->dump_string($all);
     $yaml =~ s/^---\n//;
     $yaml =~ s/\n(\w)/\n\n$1/g;
