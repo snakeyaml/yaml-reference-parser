@@ -54,7 +54,7 @@
 
       s_separate_in_line() {
         // debug_rule("s_separate_in_line")
-        return this.any(this.rgx(RegExp(`${s_separate_spaces}`, "y")), this.start_of_line);
+        return this.any(this.rgx(RegExp(`${s_separate_spaces}`, "yu")), this.start_of_line);
       }
 
       // [067]
@@ -124,7 +124,7 @@
       //   b-comment
       s_b_comment() {
         // debug_rule("s_b_comment")
-        return this.all(this.rep(0, 1, this.all(this.s_separate_in_line, this.rgx2(RegExp(`${c_nb_comment_text}?`, "y")))), this.rgx2(re_b_comment));
+        return this.all(this.rep(0, 1, this.all(this.s_separate_in_line, this.rgx2(RegExp(`${c_nb_comment_text}?`, "yu")))), this.rgx2(re_b_comment));
       }
 
       // [078]
@@ -133,7 +133,7 @@
       //   b-comment
       l_comment() {
         // debug_rule("l_comment")
-        return this.all(this.s_separate_in_line, this.rgx(RegExp(`${c_nb_comment_text}*${b_comment}`, "y")));
+        return this.all(this.s_separate_in_line, this.rgx(RegExp(`${c_nb_comment_text}*${b_comment}`, "yu")));
       }
 
       // [079]
@@ -204,7 +204,7 @@
       //   s-separate-in-line ns-tag-prefix
       ns_tag_directive() {
         // debug_rule("ns_tag_directive")
-        return this.all(this.rgx(RegExp(`TAG${s_separate_spaces}`, "y")), this.c_tag_handle, this.s_separate_in_line, this.ns_tag_prefix);
+        return this.all(this.rgx(RegExp(`TAG${s_separate_spaces}`, "yu")), this.c_tag_handle, this.s_separate_in_line, this.ns_tag_prefix);
       }
 
       c_tag_handle() {
@@ -235,7 +235,7 @@
       //   | c-non-specific-tag
       c_ns_tag_property() {
         // debug_rule("c_ns_tag_property")
-        return this.rgx(RegExp(`(?:(!<${ns_uri_char}+>)|(${c_tag_handle}${ns_tag_char}+)|!)`, "y"));
+        return this.rgx(RegExp(`(?:(!<${ns_uri_char}+>)|(${c_tag_handle}${ns_tag_char}+)|!)`, "yu"));
       }
 
       c_ns_anchor_property() {
@@ -358,7 +358,7 @@
       //   ( s-single-next-line(n) | s-white* ) )?
       s_single_next_line(n) {
         // debug_rule("s_single_next_line",n)
-        return this.all([this.s_flow_folded, n], this.rep(0, 1, this.all(this.rgx(RegExp(`${ns_single_char}${nb_ns_single_in_line}`, "y")), this.any([this.s_single_next_line, n], this.rep(0, null, this.s_white)))));
+        return this.all([this.s_flow_folded, n], this.rep(0, 1, this.all(this.rgx(RegExp(`${ns_single_char}${nb_ns_single_in_line}`, "yu")), this.any([this.s_single_next_line, n], this.rep(0, null, this.s_white)))));
       }
 
       // [125]
@@ -377,7 +377,7 @@
       //   <followed_by_an_ns-plain-safe(c)> )
       ns_plain_first(c) {
         // debug_rule("ns_plain_first",c)
-        return this.any(this.rgx(RegExp(`(?!${c_indicator})${ns_char}`, "y")), this.all(this.rgx(/[\?\:\-]/y), this.chk('=', [this.ns_plain_safe, c])));
+        return this.any(this.rgx(RegExp(`(?!${c_indicator})${ns_char}`, "yu")), this.all(this.rgx(/[?:-]/yu), this.chk('=', [this.ns_plain_safe, c])));
       }
 
       // [127]
@@ -797,7 +797,7 @@
       //   l-comment*
       l_trail_comments(n) {
         // debug_rule("l_trail_comments",n)
-        return this.all([this.s_indent_lt, n], this.rgx(RegExp(`${c_nb_comment_text}${b_comment}`, "y")), this.rep(0, null, this.l_comment));
+        return this.all([this.s_indent_lt, n], this.rgx(RegExp(`${c_nb_comment_text}${b_comment}`, "yu")), this.rep(0, null, this.l_comment));
       }
 
       // [170]
@@ -1192,14 +1192,14 @@
       if (!re instanceof RegExp) {
         throw `Not a regex ${re}`;
       }
-      return String(re).slice(1, -2);
+      return String(re).slice(1, -3);
     };
 
     r2c = function(re) {
       if (!re instanceof RegExp) {
         throw `Not a regex ${re}`;
       }
-      return String(re).slice(2, -3);
+      return String(re).slice(2, -4);
     };
 
     // [001]
@@ -1207,12 +1207,12 @@
     //   x:9 | x:A | x:D | [x:20-x:7E]
     //   | x:85 | [x:A0-x:D7FF] | [x:E000-x:FFFD]
     //   | [x:10000-x:10FFFF]
-    c_printable = r2s(/[\u0009\u000a\u000d\u0020-\u007e\u0085\u00a0-\ud7ff\ue000-\ufffd]/y); // \u{010000}-\u{10FFFF}
+    c_printable = r2s(/[\u{09}\u{0A}\u{0D}\u{20}-\u{7E}\u{85}\u{A0}-\u{D7FF}\u{E000}-\u{FFFD}\u{10000}-\u{10FFFF}]/yu);
 
     // [002]
     // nb-json ::=
     //   x:9 | [x:20-x:10FFFF]
-    nb_json = r2s(/[\u0009\u0020-\uffff]/y); // \u{20}-\u{10FFFF}
+    nb_json = r2s(/[\u{09}\u{20}-\u{ffff}]/yu); // \u{20}-\u{10FFFF}
 
     // [003]
     // c-byte-order-mark ::=
@@ -1224,12 +1224,12 @@
     //   '-' | '?' | ':' | ',' | '[' | ']' | '{' | '}'
     //   | '#' | '&' | '*' | '!' | '|' | '>' | ''' | '"'
     //   | '%' | '@' | '`'
-    c_indicator = r2s(/[\-\?\:\,\[\]\{\}\#\&\*\!\|\>\'\"\%\@\`]/y);
+    c_indicator = r2s(/[-?:,[\]{}&*!\u{23}|>'"%@`]/yu);
 
     // [023]
     // c-flow-indicator ::=
     //   ',' | '[' | ']' | '{' | '}'
-    c_flow_indicator = r2s(/[\,\[\]\{\}]/y);
+    c_flow_indicator = r2s(/[,[\]{}]/yu);
 
     // [024]
     // b-line-feed ::=
@@ -1244,7 +1244,7 @@
     // [026]
     // b-char ::=
     //   b-line-feed | b-carriage-return
-    re_b_char = /[\u000a\u000d]/y;
+    re_b_char = /[\u{0A}\u{0D}]/yu;
 
     b_char = r2s(re_b_char);
 
@@ -1253,7 +1253,7 @@
     // [027]
     // nb-char ::=
     //   c-printable - b-char - c-byte-order-mark
-    re_nb_char = RegExp(`(?:(?![${b_char_s}${c_byte_order_mark}])${c_printable})`, "y");
+    re_nb_char = RegExp(`(?:(?![${b_char_s}${c_byte_order_mark}])${c_printable})`, "yu");
 
     nb_char = r2s(re_nb_char);
 
@@ -1262,7 +1262,7 @@
     //   ( b-carriage-return b-line-feed )
     //   | b-carriage-return
     //   | b-line-feed
-    re_line_break = RegExp(`(?:${b_carriage_return}${b_line_feed}|${b_carriage_return}|${b_line_feed})`, "y");
+    re_line_break = RegExp(`(?:${b_carriage_return}${b_line_feed}|${b_carriage_return}|${b_line_feed})`, "yu");
 
     line_break = r2s(re_line_break);
 
@@ -1274,21 +1274,21 @@
     // [033]
     // s-white ::=
     //   s-space | s-tab
-    re_s_white = RegExp(`[${s_space}\\t]`, "y");
+    re_s_white = RegExp(`[${s_space}\\t]`, "yu");
 
     s_white = r2s(re_s_white);
 
     // [034]
     // ns-char ::=
     //   nb-char - s-white
-    re_ns_char = RegExp(`(?:(?!${s_white})${nb_char})`, "y");
+    re_ns_char = RegExp(`(?:(?!${s_white})${nb_char})`, "yu");
 
     ns_char = r2s(re_ns_char);
 
     // [035]
     // ns-dec-digit ::=
     //   [x:30-x:39]
-    re_ns_dec_digit = /[0-9]/y;
+    re_ns_dec_digit = /[0-9]/yu;
 
     ns_dec_digit = r2s(re_ns_dec_digit);
 
@@ -1298,19 +1298,19 @@
     // ns-hex-digit ::=
     //   ns-dec-digit
     //   | [x:41-x:46] | [x:61-x:66]
-    ns_hex_digit = r2s(RegExp(`[${ns_dec_digit_s}A-Fa-f]`, "y"));
+    ns_hex_digit = r2s(RegExp(`[${ns_dec_digit_s}A-Fa-f]`, "yu"));
 
     // [037]
     // ns-ascii-letter ::=
     //   [x:41-x:5A] | [x:61-x:7A]
-    re_ns_ascii_letter = /[\u0041-\u005a\u0061-\u007a]/y;
+    re_ns_ascii_letter = /[\u{41}-\u{5A}\u{61}-\u{7A}]/yu;
 
     ns_ascii_letter_s = r2c(re_ns_ascii_letter);
 
     // [038]
     // ns-word-char ::=
     //   ns-dec-digit | ns-ascii-letter | '-'
-    re_ns_word_char = RegExp(`[\\-${ns_dec_digit_s}${ns_ascii_letter_s}]`, "y");
+    re_ns_word_char = RegExp(`[\\-${ns_dec_digit_s}${ns_ascii_letter_s}]`, "yu");
 
     ns_word_char = r2s(re_ns_word_char);
 
@@ -1321,12 +1321,12 @@
     //   '%' ns-hex-digit ns-hex-digit | ns-word-char | '#'
     //   | ';' | '/' | '?' | ':' | '@' | '&' | '=' | '+' | '$' | ','
     //   | '_' | '.' | '!' | '~' | '*' | ''' | '(' | ')' | '[' | ']'
-    ns_uri_char = r2s(RegExp(`(?:%${ns_hex_digit}{2}|[${ns_word_char_s}\\#\\;\\/\\?\\:\\@\\&\\=\\+\\$\\,\\_\\.\\!\\~\\*\\'\\(\\)\\[\\]])`, "y"));
+    ns_uri_char = r2s(RegExp(`(?:%${ns_hex_digit}{2}|[${ns_word_char_s}\\u{23};/?:@&=+$,_.!~*'()[\\]])`, "yu"));
 
     // [040]
     // ns-tag-char ::=
     //   ns-uri-char - '!' - c-flow-indicator
-    ns_tag_char = r2s(RegExp(`(?:(?!!|${c_flow_indicator})${ns_uri_char})`, "y"));
+    ns_tag_char = r2s(RegExp(`(?:(?!!|${c_flow_indicator})${ns_uri_char})`, "yu"));
 
     // [062]
     // c-ns-esc-char ::=
@@ -1339,194 +1339,194 @@
     //   | ns-esc-next-line | ns-esc-non-breaking-space
     //   | ns-esc-line-separator | ns-esc-paragraph-separator
     //   | ns-esc-8-bit | ns-esc-16-bit | ns-esc-32-bit )
-    c_ns_esc_char = r2s(RegExp(`\\\\(?:[0abt\\u0009nvfre\\u0020\\"\\/\\\\N_LP]|x${ns_hex_digit}{2}|u${ns_hex_digit}{4}|U${ns_hex_digit}{8})`, "y"));
+    c_ns_esc_char = r2s(RegExp(`\\\\(?:[0abt\\u{09}nvfre\\u{20}"/\\\\N_LP]|x${ns_hex_digit}{2}|u${ns_hex_digit}{4}|U${ns_hex_digit}{8})`, "yu"));
 
     // [063]
-    re_s_indent = RegExp(`${s_space}*`, "y");
+    re_s_indent = RegExp(`${s_space}*`, "yu");
 
     re_s_indent_n = function(n) {
-      return RegExp(`${s_space}{${n}}`, "y");
+      return RegExp(`${s_space}{${n}}`, "yu");
     };
 
     // [066]
     // s-separate-in-line ::=
     //   s-white+ | <start_of_line>
-    s_separate_spaces = r2s(RegExp(`${s_white}+`, "y"));
+    s_separate_spaces = r2s(RegExp(`${s_white}+`, "yu"));
 
     // [075]
     // c-nb-comment-text ::=
     //   '#' nb-char*
-    c_nb_comment_text = r2s(RegExp(`(?:\\#${nb_char}*)`, "y"));
+    c_nb_comment_text = r2s(RegExp(`(?:\\u{23}${nb_char}*)`, "yu"));
 
     // [076]
     // b-comment ::=
     //   b-non-content | <end_of_file>
-    re_b_comment = RegExp(`(?:${line_break}|$)`, "y");
+    re_b_comment = RegExp(`(?:${line_break}|$)`, "yu");
 
     b_comment = r2s(re_b_comment);
 
     // [084]
     // ns-directive-name ::=
     //   ns-char+
-    ns_directive_name = r2s(RegExp(`${ns_char}+`, "y"));
+    ns_directive_name = r2s(RegExp(`${ns_char}+`, "yu"));
 
     // [085]
     // ns-directive-parameter ::=
     //   ns-char+
-    ns_directive_parameter = r2s(RegExp(`${ns_char}+`, "y"));
+    ns_directive_parameter = r2s(RegExp(`${ns_char}+`, "yu"));
 
     // [083]
     // ns-reserved-directive ::=
     //   ns-directive-name
     //   ( s-separate-in-line ns-directive-parameter )*
-    re_ns_reserved_directive = RegExp(`${ns_directive_name}(?:${s_separate_spaces}${ns_directive_parameter})*`, "y");
+    re_ns_reserved_directive = RegExp(`${ns_directive_name}(?:${s_separate_spaces}${ns_directive_parameter})*`, "yu");
 
     // [087]
     // ns-yaml-version ::=
     //   ns-dec-digit+ '.' ns-dec-digit+
-    re_ns_yaml_version = RegExp(`${ns_dec_digit}+\\.${ns_dec_digit}+`, "y");
+    re_ns_yaml_version = RegExp(`${ns_dec_digit}+\\.${ns_dec_digit}+`, "yu");
 
     // [086]
     // ns-yaml-directive ::=
     //   'Y' 'A' 'M' 'L'
     //   s-separate-in-line ns-yaml-version
-    re_ns_yaml_directive = RegExp(`(?:YAML${s_separate_spaces})`, "y");
+    re_ns_yaml_directive = RegExp(`(?:YAML${s_separate_spaces})`, "yu");
 
     // [090]
     // c-primary-tag-handle ::=
     //   '!'
-    c_primary_tag_handle = r2s(/!/y);
+    c_primary_tag_handle = r2s(/!/yu);
 
     // [091]
     // c-secondary-tag-handle ::=
     //   '!' '!'
-    c_secondary_tag_handle = r2s(/!!/y);
+    c_secondary_tag_handle = r2s(/!!/yu);
 
     // [092]
     // c-named-tag-handle ::=
     //   '!' ns-word-char+ '!'
-    c_named_tag_handle = r2s(RegExp(`!${ns_word_char}+!`, "y"));
+    c_named_tag_handle = r2s(RegExp(`!${ns_word_char}+!`, "yu"));
 
     // [089]
     // c-tag-handle ::=
     //   c-named-tag-handle
     //   | c-secondary-tag-handle
     //   | c-primary-tag-handle
-    re_c_tag_handle = RegExp(`(?:${c_named_tag_handle}|${c_secondary_tag_handle}|${c_primary_tag_handle})`, "y");
+    re_c_tag_handle = RegExp(`(?:${c_named_tag_handle}|${c_secondary_tag_handle}|${c_primary_tag_handle})`, "yu");
 
     c_tag_handle = r2s(re_c_tag_handle);
 
     // [094]
     // c-ns-local-tag-prefix ::=
     //   '!' ns-uri-char*
-    c_ns_local_tag_prefix = r2s(RegExp(`!${ns_uri_char}*`, "y"));
+    c_ns_local_tag_prefix = r2s(RegExp(`!${ns_uri_char}*`, "yu"));
 
     // [095]
     // ns-global-tag-prefix ::=
     //   ns-tag-char ns-uri-char*
-    ns_global_tag_prefix = r2s(RegExp(`${ns_tag_char}${ns_uri_char}*`, "y"));
+    ns_global_tag_prefix = r2s(RegExp(`${ns_tag_char}${ns_uri_char}*`, "yu"));
 
     // [093]
     // ns-tag-prefix ::=
     //   c-ns-local-tag-prefix | ns-global-tag-prefix
-    re_ns_tag_prefix = RegExp(`(?:${c_ns_local_tag_prefix}|${ns_global_tag_prefix})`, "y");
+    re_ns_tag_prefix = RegExp(`(?:${c_ns_local_tag_prefix}|${ns_global_tag_prefix})`, "yu");
 
     // [103]
     // ns-anchor-name ::=
     //   ns-anchor-char+
-    ns_anchor_name = r2s(RegExp(`(?:(?!${c_flow_indicator})${ns_char})+`, "y"));
+    ns_anchor_name = r2s(RegExp(`(?:(?!${c_flow_indicator})${ns_char})+`, "yu"));
 
     // [101]
     // c-ns-anchor-property ::=
     //   '&' ns-anchor-name
-    re_c_ns_anchor_property = RegExp(`\\&${ns_anchor_name}`, "y");
+    re_c_ns_anchor_property = RegExp(`&${ns_anchor_name}`, "yu");
 
     // [104]
     // c-ns-alias-node ::=
     //   '*' ns-anchor-name
-    re_c_ns_alias_node = RegExp(`\\*${ns_anchor_name}`, "y");
+    re_c_ns_alias_node = RegExp(`\\*${ns_anchor_name}`, "yu");
 
     // [107]
     // nb-double-char ::=
     //   c-ns-esc-char | ( nb-json - '\' - '"' )
-    nb_double_char = r2s(RegExp(`(?:${c_ns_esc_char}|(?![\\\\\\"])${nb_json})`, "y"));
+    nb_double_char = r2s(RegExp(`(?:${c_ns_esc_char}|(?![\\\\"])${nb_json})`, "yu"));
 
     // [108]
     // ns-double-char ::=
     //   nb-double-char - s-white
-    re_ns_double_char = RegExp(`(?!${s_white})${nb_double_char}`, "y");
+    re_ns_double_char = RegExp(`(?!${s_white})${nb_double_char}`, "yu");
 
     ns_double_char = r2s(re_ns_double_char);
 
     // [111]
     // nb-double-one-line ::=
     //   nb-double-char*
-    re_nb_double_one_line = RegExp(`${nb_double_char}*`, "y");
+    re_nb_double_one_line = RegExp(`${nb_double_char}*`, "yu");
 
     // [114]
     // nb-ns-double-in-line ::=
     //   ( s-white* ns-double-char )*
-    re_nb_ns_double_in_line = RegExp(`(?:${s_white}*${ns_double_char})*`, "y");
+    re_nb_ns_double_in_line = RegExp(`(?:${s_white}*${ns_double_char})*`, "yu");
 
     // [117]
     // c-quoted-quote ::=
     //   ''' '''
-    c_quoted_quote = r2s(/''/y);
+    c_quoted_quote = r2s(/''/yu);
 
     // [118]
     // nb-single-char ::=
     //   c-quoted-quote | ( nb-json - ''' )
-    nb_single_char = r2s(RegExp(`(?:${c_quoted_quote}|(?:(?!')${nb_json}))`, "y"));
+    nb_single_char = r2s(RegExp(`(?:${c_quoted_quote}|(?:(?!')${nb_json}))`, "yu"));
 
     // [119]
     // ns-single-char ::=
     //   nb-single-char - s-white
-    ns_single_char = r2s(RegExp(`(?:(?!${s_white})${nb_single_char})`, "y"));
+    ns_single_char = r2s(RegExp(`(?:(?!${s_white})${nb_single_char})`, "yu"));
 
     // [122]
     // nb-single-one-line ::=
     //   nb-single-char*
-    re_nb_single_one_line = RegExp(`${nb_single_char}*`, "y");
+    re_nb_single_one_line = RegExp(`${nb_single_char}*`, "yu");
 
     // [123]
     // nb-ns-single-in-line ::=
     //   ( s-white* ns-single-char )*
-    re_nb_ns_single_in_line = RegExp(`(?:${s_white}*${ns_single_char})*`, "y");
+    re_nb_ns_single_in_line = RegExp(`(?:${s_white}*${ns_single_char})*`, "yu");
 
     nb_ns_single_in_line = r2s(re_nb_ns_single_in_line);
 
     // [129]
     // ns-plain-safe-in ::=
     //   ns-char - c-flow-indicator
-    re_ns_plain_safe_in = RegExp(`(?:(?!${c_flow_indicator})${ns_char})`, "y");
+    re_ns_plain_safe_in = RegExp(`(?:(?!${c_flow_indicator})${ns_char})`, "yu");
 
     // [142]
     // ns-flow-map-entry(n,c) ::=
     //   ( '?' s-separate(n,c)
     //   ns-flow-map-explicit-entry(n,c) )
     //   | ns-flow-map-implicit-entry(n,c)
-    ws_lookahead = r2s(RegExp(`(?=$|${s_white}|${line_break})`, "y"));
+    ws_lookahead = r2s(RegExp(`(?=$|${s_white}|${line_break})`, "yu"));
 
-    re_ns_flow_map_entry = RegExp(`\\?${ws_lookahead}`, "y");
+    re_ns_flow_map_entry = RegExp(`\\?${ws_lookahead}`, "yu");
 
     // [150]
     // ns-flow-pair(n,c) ::=
     //   ( '?' s-separate(n,c)
     //   ns-flow-map-explicit-entry(n,c) )
     //   | ns-flow-pair-entry(n,c)
-    re_ns_flow_pair = RegExp(`\\?${ws_lookahead}`, "y");
+    re_ns_flow_pair = RegExp(`\\?${ws_lookahead}`, "yu");
 
     // [203]
     // c-directives-end ::=
     //   '-' '-' '-'
-    re_c_directives_end = RegExp(`---(?=$|${s_white}|${line_break})`, "y");
+    re_c_directives_end = RegExp(`---(?=$|${s_white}|${line_break})`, "yu");
 
     c_directives_end = r2s(re_c_directives_end);
 
     // [204]
     // c-document-end ::=
     //   '.' '.' '.'
-    re_c_document_end = /\.\.\./y;
+    re_c_document_end = /\.\.\./yu;
 
     c_document_end = r2s(re_c_document_end);
 
@@ -1535,7 +1535,7 @@
     //   <start_of_line>
     //   ( c-directives-end | c-document-end )
     //   ( b-char | s-white | <end_of_file> )
-    re_c_forbidden = RegExp(`(?:${c_directives_end}|${c_document_end})(?:${b_char}|${s_white}|$)`, "y");
+    re_c_forbidden = RegExp(`(?:${c_directives_end}|${c_document_end})(?:${b_char}|${s_white}|$)`, "yu");
 
     return Grammar;
 
