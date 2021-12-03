@@ -174,10 +174,6 @@ global.Parser = class Parser extends Grammar
 
       return false
 
-  may: (func)->
-    may = ->
-      @call func
-
   # Repeat a rule a certain number of times:
   rep: (min, max, func)->
     rep = ->
@@ -237,6 +233,23 @@ global.Parser = class Parser extends Grammar
         @input[@pos..].match /^(?:---|\.\.\.)(?=\s|$)/
       )
     )
+
+  rgx: (regex)->
+    rgx = ->
+      return false if @the_end()
+      if m = @input[@pos..].match(regex)
+        @pos += m[0].length
+        return true
+      return false
+    name_ 'rgx', rgx, "rgx(#{stringify regex})"
+
+  rgx2: (regex)->
+    rgx = ->
+      if m = @input[@pos..].match(regex)
+        @pos += m[0].length
+        return true
+      return false
+    name_ 'rgx', rgx, "rgx(#{stringify regex})"
 
   # Match a single char:
   chr: (char)->
@@ -455,7 +468,13 @@ global.Parser = class Parser extends Grammar
   trace: (type, call, args=[])->
     call = String(call) unless isString call  # XXX
     call = "'#{call}'" if call.match /^($| |.* $)/
+
     return unless @trace_on or call == @trace_start()
+
+    if call.startsWith 'rgx'
+      call = call
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "\\r")
 
     level = @state_curr().lvl
     indent = _.repeat ' ', level

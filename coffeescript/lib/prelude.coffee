@@ -20,6 +20,7 @@ global.isNull = _.isNull
 global.isBoolean = _.isBoolean
 global.isNumber = _.isNumber
 global.isString = _.isString
+global.isRegex = _.isRegExp
 global.isFunction = _.isFunction
 global.isArray = _.isArray
 global.isObject = _.isPlainObject
@@ -29,6 +30,7 @@ global.typeof_ = (value)->
   return 'boolean' if _.isBoolean value
   return 'number' if _.isNumber value
   return 'string' if _.isString value
+  return 'regex' if _.isRegex value
   return 'function' if _.isFunction value
   return 'array' if _.isArray value
   return 'object' if _.isPlainObject value
@@ -37,6 +39,8 @@ global.typeof_ = (value)->
 global.stringify = (o)->
   if o == "\ufeff"
     return "\\uFEFF"
+  if isRegex o
+    return String(o)
   if isFunction o
     return "@#{o.trace || o.name}"
   if isObject o
