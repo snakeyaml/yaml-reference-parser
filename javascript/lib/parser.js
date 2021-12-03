@@ -319,7 +319,8 @@
         if (this.the_end()) {
           return false;
         }
-        if (m = this.input.slice(this.pos).match(regex)) {
+        regex.lastIndex = this.pos;
+        if (m = this.input.match(regex)) {
           this.pos += m[0].length;
           return true;
         }
@@ -332,7 +333,8 @@
       var rgx;
       rgx = function() {
         var m;
-        if (m = this.input.slice(this.pos).match(regex)) {
+        regex.lastIndex = this.pos;
+        if (m = this.input.match(regex)) {
           this.pos += m[0].length;
           return true;
         }

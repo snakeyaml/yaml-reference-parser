@@ -237,7 +237,8 @@ global.Parser = class Parser extends Grammar
   rgx: (regex)->
     rgx = ->
       return false if @the_end()
-      if m = @input[@pos..].match(regex)
+      regex.lastIndex = @pos
+      if m = @input.match(regex)
         @pos += m[0].length
         return true
       return false
@@ -245,7 +246,8 @@ global.Parser = class Parser extends Grammar
 
   rgx2: (regex)->
     rgx = ->
-      if m = @input[@pos..].match(regex)
+      regex.lastIndex = @pos
+      if m = @input.match(regex)
         @pos += m[0].length
         return true
       return false
