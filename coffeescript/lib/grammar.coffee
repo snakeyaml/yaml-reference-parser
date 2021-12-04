@@ -1,22 +1,20 @@
-###
-This grammar class was generated from https://yaml.org/spec/1.2/spec.html
-###
-
 global.Grammar = class Grammar
 
+  # Helper functions:
+
+  # Generate required regular expression and string variants:
+  r = (rgx)->
+    rgx = String(rgx)
+    rgx = rgx[0..-2] if rgx.endsWith('u')
+    rgx = String(rgx)[1..-2]
+    chars = rgx[1..-2]
+    regexp = /// #{rgx} ///yum
+    return [ rgx, regexp, chars ]
+
+
+  # Grammar rules:
+
   TOP: -> @l_yaml_stream
-
-  r2s = (re)->
-    if not re instanceof RegExp
-      throw "Not a regex #{re}"
-    String(re)[1..-4]
-
-  r2c = (re)->
-    if not re instanceof RegExp
-      throw "Not a regex #{re}"
-    String(re)[2..-5]
-
-
 
   # [001]
   # c-printable ::=
@@ -24,18 +22,18 @@ global.Grammar = class Grammar
   #   | x:85 | [x:A0-x:D7FF] | [x:E000-x:FFFD]
   #   | [x:10000-x:10FFFF]
 
-  c_printable = r2s ///
+  [c_printable] = r ///
     [
-      \u{09}
-      \u{0A}
-      \u{0D}
-      \u{20}-\u{7E}
-      \u{85}
-      \u{A0}-\u{D7FF}
-      \u{E000}-\u{FFFD}
+      \x09
+      \x0A
+      \x0D
+      \x20-\x7E
+      \x85
+      \xA0-\uD7FF
+      \uE000-\uFFFD
       \u{10000}-\u{10FFFF}
     ]
-  ///yu
+  ///u
 
 
 
@@ -43,13 +41,12 @@ global.Grammar = class Grammar
   # nb-json ::=
   #   x:9 | [x:20-x:10FFFF]
 
-  nb_json = r2s ///
+  [nb_json] = r ///
     [
-      \u{09}
-      \u{20}-\u{ffff}
-      # \u{20}-\u{10FFFF}
+      \x09
+      \x20-\u{10FFFF}
     ]
-  ///yu
+  ///u
 
 
 
@@ -67,15 +64,29 @@ global.Grammar = class Grammar
   #   | '#' | '&' | '*' | '!' | '|' | '>' | ''' | '"'
   #   | '%' | '@' | '`'
 
-  c_indicator = r2s ///
+  [c_indicator] = r ///
     [
-       -  ?  :  ,
-       [ \]  {  }
-       &  *  !  \u{23}
-       |  >  '  "
-       %  @  `
+       -
+       ?
+       :
+       ,
+       [
+       \]
+       {
+       }
+       \x23
+       &
+       *
+       !
+       |
+       >
+       '
+       "
+       %
+       @
+       `
     ]
-  ///yu
+  ///
 
 
 
@@ -83,11 +94,15 @@ global.Grammar = class Grammar
   # c-flow-indicator ::=
   #   ',' | '[' | ']' | '{' | '}'
 
-  c_flow_indicator = r2s ///
+  [c_flow_indicator, , c_flow_indicator_s] = r ///
     [
-      , [ \] { }
+      ,
+      [
+      \]
+      {
+      }
     ]
-  ///yu
+  ///
 
 
 
@@ -95,7 +110,9 @@ global.Grammar = class Grammar
   # b-line-feed ::=
   #   x:A
 
-  b_line_feed = "\u{0A}"
+  [b_line_feed] = r ///
+    \x0A
+  ///
 
 
 
@@ -103,7 +120,9 @@ global.Grammar = class Grammar
   # b-carriage-return ::=
   #   x:D
 
-  b_carriage_return = "\u{0D}"
+  [b_carriage_return] = r ///
+    \x0D
+  ///
 
 
 
@@ -111,11 +130,12 @@ global.Grammar = class Grammar
   # b-char ::=
   #   b-line-feed | b-carriage-return
 
-  re_b_char = ///
-    [ \u{0A} \u{0D} ]
-  ///yu
-  b_char = r2s re_b_char
-  b_char_s = r2c re_b_char
+  [b_char, re_b_char, b_char_s] = r ///
+    [
+      #{b_line_feed}
+      #{b_carriage_return}
+    ]
+  ///
 
 
 
@@ -123,7 +143,7 @@ global.Grammar = class Grammar
   # nb-char ::=
   #   c-printable - b-char - c-byte-order-mark
 
-  re_nb_char = ///
+  [nb_char, re_nb_char] = r ///
     (?:
       (?!
         [
@@ -133,8 +153,7 @@ global.Grammar = class Grammar
       )
       #{c_printable}
     )
-  ///yu
-  nb_char = r2s re_nb_char
+  ///u
 
   nb_char: ->
     # debug_rule("nb_char")
@@ -148,15 +167,16 @@ global.Grammar = class Grammar
   #   | b-carriage-return
   #   | b-line-feed
 
-  re_line_break = ///
+  [line_break, re_line_break] = r ///
     (?:
-      #{b_carriage_return}
-      #{b_line_feed}
+      (?:
+        #{b_carriage_return}
+        #{b_line_feed}
+      )
     | #{b_carriage_return}
     | #{b_line_feed}
     )
-  ///yu
-  line_break = r2s re_line_break
+  ///
 
 
 
@@ -174,7 +194,9 @@ global.Grammar = class Grammar
   # s-space ::=
   #   x:20
 
-  s_space = "\u{20}"
+  [s_space] = r ///
+    \u{20}
+  ///
 
 
 
@@ -182,13 +204,12 @@ global.Grammar = class Grammar
   # s-white ::=
   #   s-space | s-tab
 
-  re_s_white = ///
+  [s_white, re_s_white] = r ///
     [
       #{s_space}
       \t
     ]
-  ///yu
-  s_white = r2s re_s_white
+  ///
 
   s_white: ->
     # debug_rule("s_white")
@@ -200,13 +221,14 @@ global.Grammar = class Grammar
   # ns-char ::=
   #   nb-char - s-white
 
-  re_ns_char = ///
+  [ns_char, re_ns_char] = r ///
     (?:
-      (?! #{s_white} )
+      (?!
+        #{s_white}
+      )
       #{nb_char}
     )
-  ///yu
-  ns_char = r2s re_ns_char
+  ///u
 
   ns_char: ->
     # debug_rule("ns_char")
@@ -218,11 +240,11 @@ global.Grammar = class Grammar
   # ns-dec-digit ::=
   #   [x:30-x:39]
 
-  re_ns_dec_digit = ///
-    [ 0 - 9 ]
-  ///yu
-  ns_dec_digit = r2s re_ns_dec_digit
-  ns_dec_digit_s = r2c re_ns_dec_digit
+  [ns_dec_digit, , ns_dec_digit_s] = r ///
+    [
+      0 - 9
+    ]
+  ///
 
 
 
@@ -231,13 +253,13 @@ global.Grammar = class Grammar
   #   ns-dec-digit
   #   | [x:41-x:46] | [x:61-x:66]
 
-  ns_hex_digit = r2s ///
+  [ns_hex_digit] = r ///
     [
       #{ns_dec_digit_s}
-      A-F
-      a-f
+      A - F
+      a - f
     ]
-  ///yu
+  ///
 
 
 
@@ -245,13 +267,12 @@ global.Grammar = class Grammar
   # ns-ascii-letter ::=
   #   [x:41-x:5A] | [x:61-x:7A]
 
-  re_ns_ascii_letter = ///
+  [, , ns_ascii_letter_s] = r ///
     [
-      \u{41}-\u{5A}
-      \u{61}-\u{7A}
+      A - Z
+      a - z
     ]
-  ///yu
-  ns_ascii_letter_s = r2c re_ns_ascii_letter
+  ///
 
 
 
@@ -259,11 +280,13 @@ global.Grammar = class Grammar
   # ns-word-char ::=
   #   ns-dec-digit | ns-ascii-letter | '-'
 
-  re_ns_word_char = ///
-    [ \- #{ns_dec_digit_s} #{ns_ascii_letter_s} ]
-  ///yu
-  ns_word_char = r2s re_ns_word_char
-  ns_word_char_s = r2c re_ns_word_char
+  [ns_word_char, , ns_word_char_s] = r ///
+    [
+      \-
+      #{ns_dec_digit_s}
+      #{ns_ascii_letter_s}
+    ]
+  ///
 
 
 
@@ -273,16 +296,35 @@ global.Grammar = class Grammar
   #   | ';' | '/' | '?' | ':' | '@' | '&' | '=' | '+' | '$' | ','
   #   | '_' | '.' | '!' | '~' | '*' | ''' | '(' | ')' | '[' | ']'
 
-  ns_uri_char = r2s ///
+  [ns_uri_char] = r ///
     (?:
       % #{ns_hex_digit}{2}
     | [
         #{ns_word_char_s}
-        \u{23} ; / ? : @ & = + $
-        , _ . ! ~ * ' ( ) [ \]
+        \u{23}
+        ;
+        /
+        ?
+        :
+        @
+        &
+        =
+        +
+        $
+        ,
+        _
+        .
+        !
+        ~
+        *
+        '
+        (
+        )
+        [
+        \]
       ]
     )
-  ///yu
+  ///
 
 
 
@@ -290,12 +332,17 @@ global.Grammar = class Grammar
   # ns-tag-char ::=
   #   ns-uri-char - '!' - c-flow-indicator
 
-  ns_tag_char = r2s ///
+  [ns_tag_char] = r ///
     (?:
-      (?! ! | #{c_flow_indicator} )
+      (?!
+        [
+          !
+          #{c_flow_indicator_s}
+        ]
+      )
       #{ns_uri_char}
     )
-  ///yu
+  ///
 
 
 
@@ -311,26 +358,44 @@ global.Grammar = class Grammar
   #   | ns-esc-line-separator | ns-esc-paragraph-separator
   #   | ns-esc-8-bit | ns-esc-16-bit | ns-esc-32-bit )
 
-  c_ns_esc_char = r2s ///
+  [c_ns_esc_char] = r ///
     \\
     (?:
       [
-        0 a b t
-        \u{09} n v f r e
-        \u{20} " / \\
-        N _ L P
+        0
+        a
+        b
+        t
+        \u{09}
+        n
+        v
+        f
+        r
+        e
+        \u{20}
+        "
+        /
+        \\
+        N
+        _
+        L
+        P
       ]
     | x #{ns_hex_digit}{2}
     | u #{ns_hex_digit}{4}
     | U #{ns_hex_digit}{8}
     )
-  ///yu
+  ///
 
 
 
   # [063]
-  re_s_indent = /// #{s_space}* ///yu
-  re_s_indent_n = (n)-> /// #{s_space}{#{n}} ///yu
+  [, re_s_indent] = r ///
+    #{s_space}*
+  ///
+
+  s_indent_n = (n)->
+    /// #{s_space}{#{n}} ///y
 
 
 
@@ -364,16 +429,22 @@ global.Grammar = class Grammar
   # s-separate-in-line ::=
   #   s-white+ | <start_of_line>
 
-  s_separate_spaces = r2s ///
+  [s_separate_spaces] = r ///
     #{s_white}+
-  ///yu
+  ///
+
+  start_of_line = '^'
+
+  [s_separate_spaces, re_s_separate_in_line] = r ///
+    (?:
+      #{s_separate_spaces}
+    | #{start_of_line}
+    )
+  ///
 
   s_separate_in_line: ->
     # debug_rule("s_separate_in_line")
-    @any(
-      @rgx(/// #{s_separate_spaces} ///yu)
-      @start_of_line
-    )
+    @rgx(re_s_separate_in_line)
 
 
 
@@ -386,15 +457,11 @@ global.Grammar = class Grammar
 
   s_line_prefix: (n, c)->
     # debug_rule("s_line_prefix",n,c)
-    @case(
-      c
-      {
-        'block-in': @rgx(re_s_indent_n(n))
-        'block-out': @rgx(re_s_indent_n(n))
-        'flow-in': [ @s_flow_line_prefix, n ]
-        'flow-out': [ @s_flow_line_prefix, n ]
-      }
-    )
+    @case c,
+      'block-in': @rgx(s_indent_n(n))
+      'block-out': @rgx(s_indent_n(n))
+      'flow-in': [ @s_flow_line_prefix, n ]
+      'flow-out': [ @s_flow_line_prefix, n ]
 
 
 
@@ -406,7 +473,7 @@ global.Grammar = class Grammar
   s_flow_line_prefix: (n)->
     # debug_rule("s_flow_line_prefix",n)
     @all(
-      @rgx(re_s_indent_n(n))
+      @rgx(s_indent_n(n))
       @rep(0, 1, @s_separate_in_line)
     )
 
@@ -475,12 +542,12 @@ global.Grammar = class Grammar
   # c-nb-comment-text ::=
   #   '#' nb-char*
 
-  c_nb_comment_text = r2s ///
+  [c_nb_comment_text] = r ///
     (?:
       \u{23}
       #{nb_char}*
     )
-  ///yu
+  ///u
 
 
 
@@ -488,13 +555,12 @@ global.Grammar = class Grammar
   # b-comment ::=
   #   b-non-content | <end_of_file>
 
-  re_b_comment = ///
+  [b_comment, re_b_comment] = r ///
     (?:
       #{line_break}
-    | $
+    | $                             # UNTESTED
     )
-  ///yu
-  b_comment = r2s re_b_comment
+  ///
 
 
 
@@ -504,15 +570,19 @@ global.Grammar = class Grammar
   #   c-nb-comment-text? )?
   #   b-comment
 
+  [, re_s_b_comment] = r ///
+    #{c_nb_comment_text}?
+  ///u
+
   s_b_comment: ->
     # debug_rule("s_b_comment")
     @all(
       @rep(0, 1
         @all(
           @s_separate_in_line
-          @rgx2(/// #{c_nb_comment_text}? ///yu)
+          @rgx(re_s_b_comment, true)
         ))
-      @rgx2(re_b_comment)
+      @rgx(re_b_comment, true)
     )
 
 
@@ -522,11 +592,16 @@ global.Grammar = class Grammar
   #   s-separate-in-line c-nb-comment-text?
   #   b-comment
 
+  [, re_l_comment] = r ///
+    #{c_nb_comment_text}*
+    #{b_comment}
+  ///u
+
   l_comment: ->
     # debug_rule("l_comment")
     @all(
       @s_separate_in_line
-      @rgx(/// #{c_nb_comment_text}* #{b_comment} ///yu)
+      @rgx(re_l_comment)
     )
 
 
@@ -559,17 +634,13 @@ global.Grammar = class Grammar
 
   s_separate: (n, c)->
     # debug_rule("s_separate",n,c)
-    @case(
-      c
-      {
-        'block-in': [ @s_separate_lines, n ]
-        'block-key': @s_separate_in_line
-        'block-out': [ @s_separate_lines, n ]
-        'flow-in': [ @s_separate_lines, n ]
-        'flow-key': @s_separate_in_line
-        'flow-out': [ @s_separate_lines, n ]
-      }
-    )
+    @case c,
+      'block-in': [ @s_separate_lines, n ]
+      'block-key': @s_separate_in_line
+      'block-out': [ @s_separate_lines, n ]
+      'flow-in': [ @s_separate_lines, n ]
+      'flow-key': @s_separate_in_line
+      'flow-out': [ @s_separate_lines, n ]
 
 
 
@@ -617,9 +688,9 @@ global.Grammar = class Grammar
   # ns-directive-name ::=
   #   ns-char+
 
-  ns_directive_name = r2s ///
+  [ns_directive_name] = r ///
     #{ns_char}+
-  ///yu
+  ///u
 
 
 
@@ -627,9 +698,9 @@ global.Grammar = class Grammar
   # ns-directive-parameter ::=
   #   ns-char+
 
-  ns_directive_parameter = r2s ///
+  [ns_directive_parameter] = r ///
     #{ns_char}+
-  ///yu
+  ///u
 
 
 
@@ -638,13 +709,13 @@ global.Grammar = class Grammar
   #   ns-directive-name
   #   ( s-separate-in-line ns-directive-parameter )*
 
-  re_ns_reserved_directive = ///
+  [, re_ns_reserved_directive] = r ///
     #{ns_directive_name}
     (?:
       #{s_separate_spaces}
       #{ns_directive_parameter}
     )*
-  ///yu
+  ///u
 
 
 
@@ -652,11 +723,11 @@ global.Grammar = class Grammar
   # ns-yaml-version ::=
   #   ns-dec-digit+ '.' ns-dec-digit+
 
-  re_ns_yaml_version = ///
+  [, re_ns_yaml_version] = r ///
     #{ns_dec_digit}+
     \.
     #{ns_dec_digit}+
-  ///yu
+  ///
 
   ns_yaml_version: ->
     # debug_rule("ns_yaml_version")
@@ -669,12 +740,12 @@ global.Grammar = class Grammar
   #   'Y' 'A' 'M' 'L'
   #   s-separate-in-line ns-yaml-version
 
-  re_ns_yaml_directive = ///
+  [, re_ns_yaml_directive] = r ///
     (?:
       Y A M L
       #{s_separate_spaces}
     )
-  ///yu
+  ///
 
   ns_yaml_directive: ->
     # debug_rule("ns_yaml_directive")
@@ -691,10 +762,15 @@ global.Grammar = class Grammar
   #   s-separate-in-line c-tag-handle
   #   s-separate-in-line ns-tag-prefix
 
+  [, re_ns_tag_directive] = r ///
+    T A G
+    #{s_separate_spaces}
+  ///
+
   ns_tag_directive: ->
     # debug_rule("ns_tag_directive")
     @all(
-      @rgx(/// T A G #{s_separate_spaces} ///yu)
+      @rgx(re_ns_tag_directive)
       @c_tag_handle
       @s_separate_in_line
       @ns_tag_prefix
@@ -706,9 +782,9 @@ global.Grammar = class Grammar
   # c-primary-tag-handle ::=
   #   '!'
 
-  c_primary_tag_handle = r2s ///
+  [c_primary_tag_handle] = r ///
     !
-  ///yu
+  ///
 
 
 
@@ -716,10 +792,10 @@ global.Grammar = class Grammar
   # c-secondary-tag-handle ::=
   #   '!' '!'
 
-  c_secondary_tag_handle = r2s ///
+  [c_secondary_tag_handle] = r ///
     !
     !
-  ///yu
+  ///
 
 
 
@@ -727,11 +803,11 @@ global.Grammar = class Grammar
   # c-named-tag-handle ::=
   #   '!' ns-word-char+ '!'
 
-  c_named_tag_handle = r2s ///
+  [c_named_tag_handle] = r ///
     !
     #{ns_word_char}+
     !
-  ///yu
+  ///
 
 
 
@@ -741,14 +817,13 @@ global.Grammar = class Grammar
   #   | c-secondary-tag-handle
   #   | c-primary-tag-handle
 
-  re_c_tag_handle = ///
+  [c_tag_handle, re_c_tag_handle] = r ///
     (?:
       #{c_named_tag_handle}
     | #{c_secondary_tag_handle}
     | #{c_primary_tag_handle}
     )
-  ///yu
-  c_tag_handle = r2s re_c_tag_handle
+  ///
 
   c_tag_handle: ->
     # debug_rule("c_tag_handle")
@@ -760,10 +835,10 @@ global.Grammar = class Grammar
   # c-ns-local-tag-prefix ::=
   #   '!' ns-uri-char*
 
-  c_ns_local_tag_prefix = r2s ///
+  [c_ns_local_tag_prefix] = r ///
     !
     #{ns_uri_char}*
-  ///yu
+  ///
 
 
 
@@ -771,10 +846,10 @@ global.Grammar = class Grammar
   # ns-global-tag-prefix ::=
   #   ns-tag-char ns-uri-char*
 
-  ns_global_tag_prefix = r2s ///
+  [ns_global_tag_prefix] = r ///
     #{ns_tag_char}
     #{ns_uri_char}*
-  ///yu
+  ///
 
 
 
@@ -782,12 +857,12 @@ global.Grammar = class Grammar
   # ns-tag-prefix ::=
   #   c-ns-local-tag-prefix | ns-global-tag-prefix
 
-  re_ns_tag_prefix = ///
+  [, re_ns_tag_prefix] = r ///
     (?:
       #{c_ns_local_tag_prefix}
     | #{ns_global_tag_prefix}
     )
-  ///yu
+  ///
 
   ns_tag_prefix: ->
     # debug_rule("ns_tag_prefix")
@@ -831,27 +906,27 @@ global.Grammar = class Grammar
   #   | c-ns-shorthand-tag
   #   | c-non-specific-tag
 
+  [, re_c_ns_tag_property] = r ///
+    (?:
+      (
+        !
+        <
+          #{ns_uri_char}+
+        >
+      )
+    |
+      (
+        #{c_tag_handle}
+        #{ns_tag_char}+
+      )
+    |
+      !
+    )
+  ///
+
   c_ns_tag_property: ->
     # debug_rule("c_ns_tag_property")
-    @rgx(
-      ///
-        (?:
-          (
-            !
-            <
-              #{ns_uri_char}+
-            >
-          )
-        |
-          (
-            #{c_tag_handle}
-            #{ns_tag_char}+
-          )
-        |
-          !
-        )
-      ///yu
-    )
+    @rgx(re_c_ns_tag_property)
 
 
 
@@ -859,12 +934,14 @@ global.Grammar = class Grammar
   # ns-anchor-name ::=
   #   ns-anchor-char+
 
-  ns_anchor_name = r2s ///
+  [ns_anchor_name] = r ///
     (?:
-      (?! #{c_flow_indicator} )
+      (?!
+        #{c_flow_indicator}
+      )
       #{ns_char}
     )+
-  ///yu
+  ///u
 
 
 
@@ -872,10 +949,10 @@ global.Grammar = class Grammar
   # c-ns-anchor-property ::=
   #   '&' ns-anchor-name
 
-  re_c_ns_anchor_property = ///
+  [, re_c_ns_anchor_property] = r ///
     &
     #{ns_anchor_name}
-  ///yu
+  ///u
 
   c_ns_anchor_property: ->
     # debug_rule("c_ns_anchor_property")
@@ -887,9 +964,10 @@ global.Grammar = class Grammar
   # c-ns-alias-node ::=
   #   '*' ns-anchor-name
 
-  re_c_ns_alias_node = ///
-    \* #{ns_anchor_name}
-  ///yu
+  [, re_c_ns_alias_node] = r ///
+    \*
+    #{ns_anchor_name}
+  ///u
 
   c_ns_alias_node: ->
     # debug_rule("c_ns_alias_node")
@@ -921,14 +999,14 @@ global.Grammar = class Grammar
   # nb-double-char ::=
   #   c-ns-esc-char | ( nb-json - '\' - '"' )
 
-  nb_double_char = r2s ///
+  [nb_double_char] = r ///
     (?:
       #{c_ns_esc_char}
     |
       (?! [ \\ " ])
       #{nb_json}
     )
-  ///yu
+  ///
 
 
 
@@ -936,11 +1014,10 @@ global.Grammar = class Grammar
   # ns-double-char ::=
   #   nb-double-char - s-white
 
-  re_ns_double_char = ///
+  [ns_double_char, re_ns_double_char] = r ///
     (?! #{s_white})
     #{nb_double_char}
-  ///yu
-  ns_double_char = r2s re_ns_double_char
+  ///
 
 
 
@@ -968,15 +1045,11 @@ global.Grammar = class Grammar
 
   nb_double_text: (n, c)->
     # debug_rule("nb_double_text",n,c)
-    @case(
-      c
-      {
-        'block-key': @rgx(re_nb_double_one_line)
-        'flow-in': [ @nb_double_multi_line, n ]
-        'flow-key': @rgx(re_nb_double_one_line)
-        'flow-out': [ @nb_double_multi_line, n ]
-      }
-    )
+    @case c,
+      'block-key': @rgx(re_nb_double_one_line)
+      'flow-in': [ @nb_double_multi_line, n ]
+      'flow-key': @rgx(re_nb_double_one_line)
+      'flow-out': [ @nb_double_multi_line, n ]
 
 
 
@@ -984,9 +1057,9 @@ global.Grammar = class Grammar
   # nb-double-one-line ::=
   #   nb-double-char*
 
-  re_nb_double_one_line = ///
+  [, re_nb_double_one_line] = r ///
     #{nb_double_char}*
-  ///yu
+  ///
 
 
 
@@ -1025,12 +1098,12 @@ global.Grammar = class Grammar
   # nb-ns-double-in-line ::=
   #   ( s-white* ns-double-char )*
 
-  re_nb_ns_double_in_line = ///
+  [, re_nb_ns_double_in_line] = r ///
     (?:
       #{s_white}*
       #{ns_double_char}
     )*
-  ///yu
+  ///
 
 
 
@@ -1078,7 +1151,10 @@ global.Grammar = class Grammar
   # c-quoted-quote ::=
   #   ''' '''
 
-  c_quoted_quote = r2s /// ' ' ///yu
+  [c_quoted_quote] = r ///
+    '
+    '
+  ///
 
 
 
@@ -1086,7 +1162,7 @@ global.Grammar = class Grammar
   # nb-single-char ::=
   #   c-quoted-quote | ( nb-json - ''' )
 
-  nb_single_char = r2s ///
+  [nb_single_char] = r ///
     (?:
       #{c_quoted_quote}
     | (?:
@@ -1094,7 +1170,7 @@ global.Grammar = class Grammar
         #{nb_json}
       )
     )
-  ///yu
+  ///
 
 
 
@@ -1102,12 +1178,12 @@ global.Grammar = class Grammar
   # ns-single-char ::=
   #   nb-single-char - s-white
 
-  ns_single_char = r2s ///
+  [ns_single_char] = r ///
     (?:
       (?! #{s_white})
       #{nb_single_char}
     )
-  ///yu
+  ///
 
 
 
@@ -1135,15 +1211,11 @@ global.Grammar = class Grammar
 
   nb_single_text: (n, c)->
     # debug_rule("nb_single_text",n,c)
-    @case(
-      c
-      {
-        'block-key': @rgx(re_nb_single_one_line)
-        'flow-in': [ @nb_single_multi_line, n ]
-        'flow-key': @rgx(re_nb_single_one_line)
-        'flow-out': [ @nb_single_multi_line, n ]
-      }
-    )
+    @case c,
+      'block-key': @rgx(re_nb_single_one_line)
+      'flow-in': [ @nb_single_multi_line, n ]
+      'flow-key': @rgx(re_nb_single_one_line)
+      'flow-out': [ @nb_single_multi_line, n ]
 
 
 
@@ -1151,9 +1223,9 @@ global.Grammar = class Grammar
   # nb-single-one-line ::=
   #   nb-single-char*
 
-  re_nb_single_one_line = ///
+  [, re_nb_single_one_line] = r ///
     #{nb_single_char}*
-  ///yu
+  ///
 
 
 
@@ -1161,13 +1233,12 @@ global.Grammar = class Grammar
   # nb-ns-single-in-line ::=
   #   ( s-white* ns-single-char )*
 
-  re_nb_ns_single_in_line = ///
+  [nb_ns_single_in_line, re_nb_ns_single_in_line] = r ///
     (?:
       #{s_white}*
       #{ns_single_char}
     )*
-  ///yu
-  nb_ns_single_in_line = r2s re_nb_ns_single_in_line
+  ///
 
 
 
@@ -1177,18 +1248,18 @@ global.Grammar = class Grammar
   #   ( ns-single-char nb-ns-single-in-line
   #   ( s-single-next-line(n) | s-white* ) )?
 
+  [, re_s_single_next_line] = r ///
+    #{ns_single_char}
+    #{nb_ns_single_in_line}
+  ///
+
   s_single_next_line: (n)->
     # debug_rule("s_single_next_line",n)
     @all(
       [ @s_flow_folded, n ]
       @rep(0, 1
         @all(
-          @rgx(
-            ///
-              #{ns_single_char}
-              #{nb_ns_single_in_line}
-            ///yu
-          )
+          @rgx(re_s_single_next_line)
           @any(
             [ @s_single_next_line, n ]
             @rep(0, null, @s_white)
@@ -1221,21 +1292,25 @@ global.Grammar = class Grammar
   #   | ( ( '?' | ':' | '-' )
   #   <followed_by_an_ns-plain-safe(c)> )
 
+  [, re_ns_plain_first1] = r ///
+    (?! #{c_indicator})
+    #{ns_char}
+  ///u
+
+  [, re_ns_plain_first2] = r ///
+    [
+      ?
+      :
+      -
+    ]
+  ///
+
   ns_plain_first: (c)->
     # debug_rule("ns_plain_first",c)
     @any(
-      @rgx(
-        ///
-          (?! #{c_indicator})
-          #{ns_char}
-        ///yu
-      )
+      @rgx(re_ns_plain_first1)
       @all(
-        @rgx(
-          ///
-            [ ? : - ]
-          ///yu
-        )
+        @rgx(re_ns_plain_first2)
         @chk('=', [ @ns_plain_safe, c ])
       )
     )
@@ -1251,15 +1326,11 @@ global.Grammar = class Grammar
 
   ns_plain_safe: (c)->
     # debug_rule("ns_plain_safe",c)
-    @case(
-      c
-      {
-        'block-key': @ns_char
-        'flow-in': @rgx(re_ns_plain_safe_in)
-        'flow-key': @rgx(re_ns_plain_safe_in)
-        'flow-out': @ns_char
-      }
-    )
+    @case c,
+      'block-key': @ns_char
+      'flow-in': @rgx(re_ns_plain_safe_in)
+      'flow-key': @rgx(re_ns_plain_safe_in)
+      'flow-out': @ns_char
 
 
 
@@ -1267,12 +1338,14 @@ global.Grammar = class Grammar
   # ns-plain-safe-in ::=
   #   ns-char - c-flow-indicator
 
-  re_ns_plain_safe_in = ///
+  [, re_ns_plain_safe_in] = r ///
     (?:
-      (?! #{c_flow_indicator} )
+      (?!
+        #{c_flow_indicator}
+      )
       #{ns_char}
     )
-  ///yu
+  ///u
 
 
 
@@ -1311,15 +1384,11 @@ global.Grammar = class Grammar
 
   ns_plain: (n, c)->
     # debug_rule("ns_plain",n,c)
-    @case(
-      c
-      {
-        'block-key': [ @ns_plain_one_line, c ]
-        'flow-in': [ @ns_plain_multi_line, n, c ]
-        'flow-key': [ @ns_plain_one_line, c ]
-        'flow-out': [ @ns_plain_multi_line, n, c ]
-      }
-    )
+    @case c,
+      'block-key': [ @ns_plain_one_line, c ]
+      'flow-in': [ @ns_plain_multi_line, n, c ]
+      'flow-key': [ @ns_plain_one_line, c ]
+      'flow-out': [ @ns_plain_multi_line, n, c ]
 
 
 
@@ -1390,15 +1459,11 @@ global.Grammar = class Grammar
 
   in_flow: (c)->
     # debug_rule("in_flow",c)
-    @flip(
-      c
-      {
-        'block-key': "flow-key"
-        'flow-in': "flow-in"
-        'flow-key': "flow-key"
-        'flow-out': "flow-in"
-      }
-    )
+    @flip c,
+      'block-key': "flow-key"
+      'flow-in': "flow-in"
+      'flow-key': "flow-key"
+      'flow-out': "flow-in"
 
 
 
@@ -1497,17 +1562,17 @@ global.Grammar = class Grammar
   #   ns-flow-map-explicit-entry(n,c) )
   #   | ns-flow-map-implicit-entry(n,c)
 
-  ws_lookahead = r2s ///
+  [ws_lookahead] = r ///
     (?=
       $
     | #{s_white}
     | #{line_break}
     )
-  ///yu
+  ///
 
-  re_ns_flow_map_entry = ///
+  [, re_ns_flow_map_entry] = r ///
     \? #{ws_lookahead}
-  ///yu
+  ///
 
   ns_flow_map_entry: (n, c)->
     # debug_rule("ns_flow_map_entry",n,c)
@@ -1664,9 +1729,9 @@ global.Grammar = class Grammar
   #   ns-flow-map-explicit-entry(n,c) )
   #   | ns-flow-pair-entry(n,c)
 
-  re_ns_flow_pair = ///
+  [, re_ns_flow_pair] = r ///
     \? #{ws_lookahead}
-  ///yu
+  ///
 
   ns_flow_pair: (n, c)->
     # debug_rule("ns_flow_pair",n,c)
@@ -1951,14 +2016,10 @@ global.Grammar = class Grammar
 
   b_chomped_last: (t)->
     # debug_rule("b_chomped_last",t)
-    @case(
-      t
-      {
-        'clip': @any( @b_as_line_feed, @end_of_stream )
-        'keep': @any( @b_as_line_feed, @end_of_stream )
-        'strip': @any( @rgx(re_line_break), @end_of_stream )
-      }
-    )
+    @case t,
+      'clip': @any( @b_as_line_feed, @end_of_stream )
+      'keep': @any( @b_as_line_feed, @end_of_stream )
+      'strip': @any( @rgx(re_line_break), @end_of_stream )
 
 
 
@@ -1970,14 +2031,10 @@ global.Grammar = class Grammar
 
   l_chomped_empty: (n, t)->
     # debug_rule("l_chomped_empty",n,t)
-    @case(
-      t
-      {
-        'clip': [ @l_strip_empty, n ]
-        'keep': [ @l_keep_empty, n ]
-        'strip': [ @l_strip_empty, n ]
-      }
-    )
+    @case t,
+      'clip': [ @l_strip_empty, n ]
+      'keep': [ @l_keep_empty, n ]
+      'strip': [ @l_strip_empty, n ]
 
 
 
@@ -2019,16 +2076,16 @@ global.Grammar = class Grammar
   #   c-nb-comment-text b-comment
   #   l-comment*
 
+  [, re_l_trail_comments] = r ///
+    #{c_nb_comment_text}
+    #{b_comment}
+  ///u
+
   l_trail_comments: (n)->
     # debug_rule("l_trail_comments",n)
     @all(
       [ @s_indent_lt, n ]
-      @rgx(
-        ///
-          #{c_nb_comment_text}
-          #{b_comment}
-        ///yu
-      )
+      @rgx(re_l_trail_comments)
       @rep(0, null, @l_comment)
     )
 
@@ -2058,7 +2115,7 @@ global.Grammar = class Grammar
     # debug_rule("l_nb_literal_text",n)
     @all(
       @rep(0, null, [ @l_empty, n, "block-in" ])
-      @rgx(re_s_indent_n(n))
+      @rgx(s_indent_n(n))
       @rep2(1, null, @nb_char)
     )
 
@@ -2122,7 +2179,7 @@ global.Grammar = class Grammar
   s_nb_folded_text: (n)->
     # debug_rule("s_nb_folded_text",n)
     @all(
-      @rgx(re_s_indent_n(n))
+      @rgx(s_indent_n(n))
       @ns_char
       @rep(0, null, @nb_char)
     )
@@ -2155,7 +2212,7 @@ global.Grammar = class Grammar
   s_nb_spaced_text: (n)->
     # debug_rule("s_nb_spaced_text",n)
     @all(
-      @rgx(re_s_indent_n(n))
+      @rgx(s_indent_n(n))
       @s_white
       @rep(0, null, @nb_char)
     )
@@ -2260,7 +2317,7 @@ global.Grammar = class Grammar
     @all(
       @rep(1, null
         @all(
-          @rgx(re_s_indent_n(n + m))
+          @rgx(s_indent_n(n + m))
           [ @c_l_block_seq_entry, @add(n, m) ]
         ))
     )
@@ -2295,7 +2352,7 @@ global.Grammar = class Grammar
     # debug_rule("s_l_block_indented",n,c)
     @any(
       @all(
-        @rgx(re_s_indent_n(m))
+        @rgx(s_indent_n(m))
         @any(
           [ @ns_l_compact_sequence, @add(n, @add(1, m)) ]
           [ @ns_l_compact_mapping, @add(n, @add(1, m)) ]
@@ -2321,7 +2378,7 @@ global.Grammar = class Grammar
       [ @c_l_block_seq_entry, n ]
       @rep(0, null
         @all(
-          @rgx(re_s_indent_n(n))
+          @rgx(s_indent_n(n))
           [ @c_l_block_seq_entry, n ]
         ))
     )
@@ -2340,7 +2397,7 @@ global.Grammar = class Grammar
     @all(
       @rep(1, null
         @all(
-          @rgx(re_s_indent_n(n + m))
+          @rgx(s_indent_n(n + m))
           [ @ns_l_block_map_entry, @add(n, m) ]
         ))
     )
@@ -2409,7 +2466,7 @@ global.Grammar = class Grammar
   l_block_map_explicit_value: (n)->
     # debug_rule("l_block_map_explicit_value",n)
     @all(
-      @rgx(re_s_indent_n(n))
+      @rgx(s_indent_n(n))
       @chr(':')
       [ @s_l_block_indented, n, "block-out" ]
     )
@@ -2470,7 +2527,7 @@ global.Grammar = class Grammar
       [ @ns_l_block_map_entry, n ]
       @rep(0, null
         @all(
-          @rgx(re_s_indent_n(n))
+          @rgx(s_indent_n(n))
           [ @ns_l_block_map_entry, n ]
         ))
     )
@@ -2586,13 +2643,9 @@ global.Grammar = class Grammar
 
   seq_spaces: (n, c)->
     # debug_rule("seq_spaces",n,c)
-    @flip(
-      c
-      {
-        'block-in': n
-        'block-out': @sub(n, 1)
-      }
-    )
+    @flip c,
+      'block-in': n
+      'block-out': @sub(n, 1)
 
 
 
@@ -2613,15 +2666,14 @@ global.Grammar = class Grammar
   # c-directives-end ::=
   #   '-' '-' '-'
 
-  re_c_directives_end = ///
+  [c_directives_end, re_c_directives_end] = r ///
     - - -
     (?=
       $
     | #{s_white}
     | #{line_break}
     )
-  ///yu
-  c_directives_end = r2s re_c_directives_end
+  ///
 
   c_directives_end: ->
     # debug_rule("c_directives_end")
@@ -2633,10 +2685,9 @@ global.Grammar = class Grammar
   # c-document-end ::=
   #   '.' '.' '.'
 
-  re_c_document_end = ///
+  [c_document_end, re_c_document_end] = r ///
     \. \. \.
-  ///yu
-  c_document_end = r2s re_c_document_end
+  ///
 
   c_document_end: ->
     # debug_rule("c_document_end")
@@ -2663,7 +2714,7 @@ global.Grammar = class Grammar
   #   ( c-directives-end | c-document-end )
   #   ( b-char | s-white | <end_of_file> )
 
-  re_c_forbidden = ///
+  [, re_c_forbidden] = r ///
     (?:
       #{c_directives_end}
     | #{c_document_end}
@@ -2671,9 +2722,9 @@ global.Grammar = class Grammar
     (?:
       #{b_char}
     | #{s_white}
-    | $
-  )
-  ///yu
+    | $                             # UNTESTED
+    )
+  ///
 
   c_forbidden: ->
     # debug_rule("c_forbidden")
@@ -2774,6 +2825,3 @@ global.Grammar = class Grammar
           )
         ))
     )
-
-
-

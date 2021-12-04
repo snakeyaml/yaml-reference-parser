@@ -308,31 +308,19 @@
       return this.call(value, 'number');
     }
 
+    // Check for end for doc or stream:
     the_end() {
       return this.pos >= this.end || (this.state_curr().doc && this.start_of_line() && this.input.slice(this.pos).match(/^(?:---|\.\.\.)(?=\s|$)/));
     }
 
-    rgx(regex) {
+    // Match a regex:
+    rgx(regex, on_end = false) {
       var rgx;
       rgx = function() {
         var m;
         if (this.the_end()) {
-          return false;
+          return on_end;
         }
-        regex.lastIndex = this.pos;
-        if (m = this.input.match(regex)) {
-          this.pos += m[0].length;
-          return true;
-        }
-        return false;
-      };
-      return name_('rgx', rgx, `rgx(${stringify(regex)})`);
-    }
-
-    rgx2(regex) {
-      var rgx;
-      rgx = function() {
-        var m;
         regex.lastIndex = this.pos;
         if (m = this.input.match(regex)) {
           this.pos += m[0].length;

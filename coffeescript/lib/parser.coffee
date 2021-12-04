@@ -225,6 +225,7 @@ global.Parser = class Parser extends Grammar
     return value if isString value
     return @call value, 'number'
 
+  # Check for end for doc or stream:
   the_end: ->
     return (
       @pos >= @end or (
@@ -234,18 +235,10 @@ global.Parser = class Parser extends Grammar
       )
     )
 
-  rgx: (regex)->
+  # Match a regex:
+  rgx: (regex, on_end=false)->
     rgx = ->
-      return false if @the_end()
-      regex.lastIndex = @pos
-      if m = @input.match(regex)
-        @pos += m[0].length
-        return true
-      return false
-    name_ 'rgx', rgx, "rgx(#{stringify regex})"
-
-  rgx2: (regex)->
-    rgx = ->
+      return on_end if @the_end()
       regex.lastIndex = @pos
       if m = @input.match(regex)
         @pos += m[0].length
