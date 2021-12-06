@@ -255,7 +255,7 @@ global.Receiver = class Receiver
     delete @in_scalar
     @cache_drop()
 
-  got__e_scalar: -> @add scalar_event 'plain', ''
+  got__e_node: -> @add scalar_event 'plain', ''
 
   not__s_l_block_collection__all__rep__all__any__all: ->
     delete @tag

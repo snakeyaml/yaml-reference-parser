@@ -7,6 +7,7 @@ require './prelude'
 require './grammar'
 
 TRACE = Boolean ENV.TRACE
+DEBUG = Boolean ENV.DEBUG
 
 global.Parser = class Parser extends Grammar
 
@@ -100,6 +101,9 @@ global.Parser = class Parser extends Grammar
 
     pos = @pos
     @receive func, 'try', pos
+
+    if DEBUG && func.name.match /_\w/
+      debug_rule func.name, args...
 
     value = func.apply(@, args)
     while isFunction(value) or isArray(value)
@@ -237,6 +241,9 @@ global.Parser = class Parser extends Grammar
 
   # Match a regex:
   rgx: (regex, on_end=false)->
+    if isString regex
+      regex = /// #{regex} ///y
+
     rgx = ->
       return on_end if @the_end()
       regex.lastIndex = @pos
@@ -435,7 +442,7 @@ global.Parser = class Parser extends Grammar
     '' || ENV.TRACE_START
 
   trace_quiet: ->
-    return [] if ENV.DEBUG
+    return [] if DEBUG
 
     small = [
       'b_as_line_feed',
@@ -494,7 +501,7 @@ global.Parser = class Parser extends Grammar
       input,
     )
 
-    if ENV.DEBUG
+    if DEBUG
       warn sprintf "%6d %s",
         @trace_num, line
       return

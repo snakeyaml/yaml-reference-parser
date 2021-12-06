@@ -4,7 +4,7 @@
   This is a parser class. It has a parse() method and parsing primitives for the
   grammar. It calls methods in the receiver class, when a rule matches:
   */
-  var Parser, TRACE,
+  var DEBUG, Parser, TRACE,
     indexOf = [].indexOf;
 
   require('./prelude');
@@ -12,6 +12,8 @@
   require('./grammar');
 
   TRACE = Boolean(ENV.TRACE);
+
+  DEBUG = Boolean(ENV.DEBUG);
 
   global.Parser = Parser = class Parser extends Grammar {
     constructor(receiver) {
@@ -125,6 +127,9 @@
       });
       pos = this.pos;
       this.receive(func, 'try', pos);
+      if (DEBUG && func.name.match(/_\w/)) {
+        debug_rule(func.name, ...args);
+      }
       value = func.apply(this, args);
       while (isFunction(value) || isArray(value)) {
         value = this.call(value);
@@ -316,6 +321,9 @@
     // Match a regex:
     rgx(regex, on_end = false) {
       var rgx;
+      if (isString(regex)) {
+        regex = RegExp(`${regex}`, "y");
+      }
       rgx = function() {
         var m;
         if (this.the_end()) {
@@ -632,7 +640,7 @@
 
     trace_quiet() {
       var noisy, small;
-      if (ENV.DEBUG) {
+      if (DEBUG) {
         return [];
       }
       small = ['b_as_line_feed', 's_indent', 'nb_char'];
@@ -666,7 +674,7 @@
       }
       input = input.replace(/\t/g, '\\t').replace(/\r/g, '\\r').replace(/\n/g, '\\n');
       line = sprintf("%s%s %-40s  %4d '%s'", indent, type, this.trace_format_call(call, args), this.pos, input);
-      if (ENV.DEBUG) {
+      if (DEBUG) {
         warn(sprintf("%6d %s", this.trace_num, line));
         return;
       }

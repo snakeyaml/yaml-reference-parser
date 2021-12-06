@@ -459,7 +459,7 @@
       return this.cache_drop();
     }
 
-    got__e_scalar() {
+    got__e_node() {
       return this.add(scalar_event('plain', ''));
     }
 
