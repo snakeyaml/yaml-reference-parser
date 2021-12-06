@@ -3,12 +3,337 @@
   var Grammar;
 
   global.Grammar = Grammar = (function() {
-    var b_break, b_char, b_char_s, b_comment, b_non_content, c_byte_order_mark, c_directives_end, c_document_end, c_flow_indicator, c_flow_indicator_s, c_indicator, c_named_tag_handle, c_nb_comment_text, c_non_specific_tag, c_ns_esc_char, c_ns_local_tag_prefix, c_ns_shorthand_tag, c_primary_tag_handle, c_printable, c_quoted_quote, c_secondary_tag_handle, c_tag_handle, c_verbatim_tag, end_of_file, nb_char, nb_double_char, nb_json, nb_ns_single_in_line, nb_single_char, ns_anchor_char, ns_anchor_name, ns_ascii_letter_s, ns_char, ns_dec_digit, ns_dec_digit_s, ns_directive_name, ns_directive_parameter, ns_double_char, ns_global_tag_prefix, ns_hex_digit, ns_single_char, ns_tag_char, ns_uri_char, ns_word_char, ns_word_char_s, r, re_b_as_line_feed, re_b_as_space, re_b_break, re_b_char, re_b_comment, re_b_non_content, re_c_directives_end, re_c_document_end, re_c_tag_handle, re_l_trail_comments, re_nb_char, re_nb_double_one_line, re_nb_ns_double_in_line, re_nb_ns_single_in_line, re_nb_single_one_line, re_ns_char, re_ns_double_char, re_ns_plain_safe_in, re_ns_plain_safe_out, re_ns_reserved_directive, re_s_indent, re_s_separate_in_line, re_s_single_next_line, s_indent_n, s_separate_in_line, s_space, s_white, start_of_line, ws_lookahead;
+    var b_break, b_char, b_char_s, b_comment, b_non_content, c_byte_order_mark, c_flow_indicator, c_flow_indicator_s, c_indicator, c_named_tag_handle, c_nb_comment_text, c_non_specific_tag, c_ns_esc_char, c_ns_local_tag_prefix, c_ns_shorthand_tag, c_primary_tag_handle, c_printable, c_quoted_quote, c_secondary_tag_handle, c_tag_handle, c_verbatim_tag, document_end_indicator, document_start_indicator, end_of_file, func, i, init, len, nb_char, nb_double_char, nb_json, nb_ns_single_in_line, nb_single_char, ns_anchor_char, ns_anchor_name, ns_ascii_letter_s, ns_char, ns_dec_digit, ns_dec_digit_s, ns_directive_name, ns_directive_parameter, ns_double_char, ns_global_tag_prefix, ns_hex_digit, ns_single_char, ns_tag_char, ns_uri_char, ns_word_char, ns_word_char_s, r, re_b_as_line_feed, re_b_as_space, re_b_break, re_b_char, re_b_comment, re_b_non_content, re_c_tag_handle, re_document_end_indicator, re_document_start_indicator, re_l_trail_comments, re_nb_char, re_nb_double_one_line, re_nb_ns_double_in_line, re_nb_ns_single_in_line, re_nb_single_one_line, re_ns_char, re_ns_double_char, re_ns_plain_safe_in, re_ns_plain_safe_out, re_ns_reserved_directive, re_s_indent, re_s_separate_in_line, re_s_single_next_line, s_indent_n, s_separate_in_line, s_space, s_white, start_of_line, ws_lookahead;
 
     class Grammar {
       // Grammar rules:
       TOP() {
-        return this.l_yaml_stream;
+        return this.yaml_stream;
+      }
+
+      // [001]
+      // yaml-stream ::=
+      //   document-prefix*
+      //   any-document?
+      //   (
+      //       (
+      //         document-suffix+
+      //         document-prefix*
+      //         any-document?
+      //       )
+      //     | byte-order-mark
+      //     | comment-line
+      //     | start-indicator-and-document
+      //   )*
+      yaml_stream() {
+        return this.all(this.document_prefix, this.rep(0, 1, this.any_document), this.rep2(0, null, this.any(this.all(this.document_suffix, this.rep(0, null, this.document_prefix), this.rep2(0, 1, this.any_document)), this.all(this.document_prefix, this.rep(0, 1, this.start_indicator_and_document)))));
+      }
+
+      // [002]
+      // document-prefix ::=
+      //   byte-order-mark?
+      //   comment-line*
+      document_prefix() {
+        return this.all(this.rep(0, 1, this.chr(c_byte_order_mark)), this.rep2(0, null, this.l_comment));
+      }
+
+      // [003]
+      // document-suffix ::=
+      //   document-end-indicator
+      //   comment-lines
+      document_suffix() {
+        return this.all(this.document_end_indicator, this.s_l_comments);
+      }
+
+      document_start_indicator() {
+        return this.rgx(re_document_start_indicator);
+      }
+
+      document_end_indicator() {
+        return this.rgx(re_document_end_indicator);
+      }
+
+      // [006]
+      // any-document ::=
+      //     directives-and-document
+      //   | start-indicator-and-document
+      //   | bare-document
+      any_document() {
+        return this.any(this.directives_and_document, this.start_indicator_and_document, this.bare_document);
+      }
+
+      // [007]
+      // directives-and-document ::=
+      //   directive-line+
+      //   start-indicator-and-document
+      directives_and_document() {
+        return this.all(this.rep(1, null, this.directive_line), this.start_indicator_and_document);
+      }
+
+      // [008]
+      // start-indicator-and-document ::=
+      //   document-start-indicator
+      //   (
+      //       bare-document
+      //     | (
+      //         empty-node
+      //         comment-lines
+      //       )
+      //   )
+      start_indicator_and_document() {
+        return this.all(this.document_start_indicator, this.any(this.bare_document, this.all(this.e_node, this.s_l_comments)));
+      }
+
+      // [009]
+      // bare-document ::=
+      //   block-node(-1,BLOCK-IN)
+      //   /* Excluding forbidden-content */
+      bare_document() {
+        return this.all(this.exclude(this.forbidden_content), [this.block_node, -1, "block-in"]);
+      }
+
+      // [010]
+      // directive-line ::=
+      //   '%'
+      //   (
+      //       yaml-directive-line
+      //     | tag-directive-line
+      //     | reserved-directive-line
+      //   )
+      //   comment-lines
+      directive_line() {
+        return this.all(this.chr('%'), this.any(this.ns_yaml_directive, this.ns_tag_directive, this.rgx(re_ns_reserved_directive)), this.s_l_comments);
+      }
+
+      // [011]
+      // forbidden-content ::=
+      //   <start-of-line>
+      //   (
+      //       document-start-indicator
+      //     | document-end-indicator
+      //   )
+      //   (
+      //       line-ending
+      //     | blank-character
+      //   )
+      forbidden_content() {
+        return this.rgx(RegExp(`(?:${start_of_line}(?:${document_start_indicator}|${document_end_indicator})(?:${b_char}|${s_white}|${end_of_file}))`, "y"));
+      }
+
+      // [012]
+      // block-node(n,c) ::=
+      //     block-node-in-a-block-node(n,c)
+      //   | flow-node-in-a-block-node(n)
+      block_node(n, c) {
+        return this.any([this.block_node_in_a_block_node, n, c], [this.flow_node_in_a_block_node, n]);
+      }
+
+      // [013]
+      // block-node-in-a-block-node(n,c) ::=
+      //     block-scalar(n,c)
+      //   | block-collection(n,c)
+      block_node_in_a_block_node(n, c) {
+        return this.any([this.block_scalar, n, c], [this.block_collection, n, c]);
+      }
+
+      // [014]
+      // flow-node-in-a-block-node(n) ::=
+      //   separation-characters(n+1,FLOW-OUT)
+      //   flow-node(n+1,FLOW-OUT)
+      //   comment-lines
+      flow_node_in_a_block_node(n) {
+        return this.all([this.s_separate, n + 1, "flow-out"], [this.ns_flow_node, n + 1, "flow-out"], this.s_l_comments);
+      }
+
+      // [015]
+      // block-collection(n,c) ::=
+      //   (
+      //     separation-characters(n+1,c)
+      //     node-properties(n+1,c)
+      //   )?
+      //   comment-lines
+      //   (
+      //       block-sequence-context(n,c)
+      //     | block-mapping(n)
+      //   )
+      block_collection(n, c) {
+        // XXX replace with `node-properties`
+        // [ @block_sequence_context, [ @seq_spaces, n, c ] ]
+        return this.all(this.rep(0, 1, this.all([this.s_separate, n + 1, c], this.any(this.all([this.c_ns_properties, n + 1, c], this.s_l_comments), this.all(this.c_ns_tag_property, this.s_l_comments), this.all(this.c_ns_anchor_property, this.s_l_comments)))), this.s_l_comments, this.any([this.block_sequence_context, n, c], [this.block_mapping, n]));
+      }
+
+      // [016]
+      // block-sequence-context(n,BLOCK-OUT) ::= block-sequence(n-1)
+      // block-sequence-context(n,BLOCK-IN)  ::= block-sequence(n)
+      block_sequence_context(n, c) {
+        return this.case(c, {
+          'block-out': [this.block_sequence, this.sub(n, 1)],
+          'block-in': [this.block_sequence, n]
+        });
+      }
+
+      // [017]
+      // block-scalar(n,c) ::=
+      //   separation-characters(n+1,c)
+      //   (
+      //     node-properties(n+1,c)
+      //     separation-characters(n+1,c)
+      //   )?
+      //   (
+      //       block-literal-scalar(n)
+      //     | block-folded-scalar(n)
+      //   )
+      block_scalar(n, c) {
+        return this.all([this.s_separate, n + 1, c], this.rep(0, 1, this.all([this.c_ns_properties, n + 1, c], [this.s_separate, n + 1, c])), this.any([this.c_l_literal, n], [this.c_l_folded, n]));
+      }
+
+      // [018]
+      // block-mapping(n) ::=
+      //   (
+      //     indentation-spaces(n+1+m)
+      //     block-mapping-entry(n+1+m)
+      //   )+
+      block_mapping(n) {
+        var m;
+        if (!(m = this.call([this.auto_detect_indent, n], 'number'))) {
+          return false;
+        }
+        return this.all(this.rep(1, null, this.all(this.rgx(s_indent_n(n + m)), [this.block_mapping_entry, n + m])));
+      }
+
+      // [019]
+      // block-mapping-entry(n) ::=
+      //     block-mapping-explicit-entry(n)
+      //   | block-mapping-implicit-entry(n)
+      block_mapping_entry(n) {
+        return this.any([this.block_mapping_explicit_entry, n], [this.block_mapping_implicit_entry, n]);
+      }
+
+      // [020]
+      // block-mapping-explicit-entry(n) ::=
+      //   block-mapping-explicit-key(n)
+      //   (
+      //       block-mapping-explicit-value(n)
+      //     | empty-node
+      //   )
+      block_mapping_explicit_entry(n) {
+        return this.all([this.block_mapping_explicit_key, n], this.any([this.block_mapping_explicit_value, n], this.e_node));
+      }
+
+      // [021]
+      // block-mapping-explicit-key(n) ::=
+      //   '?'                               # Not followed by non-ws char
+      //   block-indented-node(n,BLOCK-OUT)
+      block_mapping_explicit_key(n) {
+        return this.all(this.rgx(RegExp(`\\?${ws_lookahead}`, "y")), [this.block_indented_node, n, "block-out"]);
+      }
+
+      // [022]
+      // block-mapping-explicit-value(n) ::=
+      //   indentation-spaces(n)
+      //   ':'                               # Not followed by non-ws char
+      //   block-indented-node(n,BLOCK-OUT)
+      block_mapping_explicit_value(n) {
+        return this.all(this.rgx(s_indent_n(n)), this.rgx(RegExp(`:${ws_lookahead}`, "y")), [this.block_indented_node, n, "block-out"]);
+      }
+
+      // [023]
+      // block-mapping-implicit-entry(n) ::=
+      //   (
+      //       block-mapping-implicit-key
+      //     | empty-node
+      //   )
+      //   block-mapping-implicit-value(n)
+      block_mapping_implicit_entry(n) {
+        return this.all(this.any(this.block_mapping_implicit_key, this.e_node), [this.block_mapping_implicit_value, n]);
+      }
+
+      // XXX Can fold into 023
+      // [024]
+      // block-mapping-implicit-key ::=
+      //     implicit-json-key(BLOCK-KEY)
+      //   | implicit-yaml-key(BLOCK-KEY)
+      block_mapping_implicit_key() {
+        return this.any([this.c_s_implicit_json_key, "block-key"], [this.ns_s_implicit_yaml_key, "block-key"]);
+      }
+
+      // [025]
+      // block-mapping-implicit-value(n) ::=
+      //   ':'                               # Not followed by non-ws char
+      //   (
+      //       block-node(n,BLOCK-OUT)
+      //     | (
+      //         empty-node
+      //         comment-lines
+      //       )
+      //   )
+      block_mapping_implicit_value(n) {
+        return this.all(this.rgx(RegExp(`:${ws_lookahead}`, "y")), this.any([this.block_node, n, "block-out"], this.all(this.e_node, this.s_l_comments)));
+      }
+
+      // [026]
+      // compact-mapping(n) ::=
+      //   block-mapping-entry(n)
+      //   (
+      //     indentation-spaces(n)
+      //     block-mapping-entry(n)
+      //   )*
+      compact_mapping(n) {
+        return this.all([this.block_mapping_entry, n], this.rep(0, null, this.all(this.rgx(s_indent_n(n)), [this.block_mapping_entry, n])));
+      }
+
+      // [027]
+      // block-sequence(n) ::=
+      //   (
+      //     indentation-spaces(n+1+m)
+      //     block-sequence-entry(n+1+m)
+      //   )+
+      block_sequence(n) {
+        var m;
+        if (!(m = this.call([this.auto_detect_indent, n], 'number'))) {
+          return false;
+        }
+        return this.all(this.rep(1, null, this.all(this.rgx(s_indent_n(n + m)), [this.c_l_block_seq_entry, n + m])));
+      }
+
+      // [028]
+      // block-sequence-entry(n) ::=
+      //   '-'
+      //   [ lookahead ≠ non-space-character ]
+      //   block-indented-node(n,BLOCK-IN)
+      c_l_block_seq_entry(n) {
+        return this.all(this.rgx(RegExp(`-${ws_lookahead}`, "y")), this.chk('!', this.rgx(re_ns_char)), [this.block_indented_node, n, "block-in"]);
+      }
+
+      // [029]
+      // block-indented-node(n,c) ::=
+      //     (
+      //       indentation-spaces(m)
+      //       (
+      //           compact-sequence(n+1+m)
+      //         | compact-mapping(n+1+m)
+      //       )
+      //     )
+      //   | block-node(n,c)
+      //   | (
+      //       empty-node
+      //       comment-lines
+      //     )
+      block_indented_node(n, c) {
+        var m;
+        m = this.call([this.auto_detect_indent, n], 'number');
+        return this.any(this.all(this.rgx(s_indent_n(m)), this.any([this.compact_sequence, n + 1 + m], [this.compact_mapping, n + 1 + m])), [this.block_node, n, c], this.all(this.e_node, this.s_l_comments));
+      }
+
+      // [030]
+      // compact-sequence(n) ::=
+      //   block-sequence-entry(n)
+      //   (
+      //     indentation-spaces(n)
+      //     block-sequence-entry(n)
+      //   )*
+      compact_sequence(n) {
+        return this.all([this.c_l_block_seq_entry, n], this.rep(0, null, this.all(this.rgx(s_indent_n(n)), [this.c_l_block_seq_entry, n])));
       }
 
       // [064]
@@ -131,17 +456,6 @@
       //   | s-separate-in-line
       s_separate_lines(n) {
         return this.any(this.all(this.s_l_comments, [this.s_flow_line_prefix, n]), this.rgx(re_s_separate_in_line));
-      }
-
-      // [082]
-      // l-directive ::=
-      //   '%'
-      //   ( ns-yaml-directive
-      //   | ns-tag-directive
-      //   | ns-reserved-directive )
-      //   s-l-comments
-      l_directive() {
-        return this.all(this.chr('%'), this.any(this.ns_yaml_directive, this.ns_tag_directive, this.rgx(re_ns_reserved_directive)), this.s_l_comments);
       }
 
       // [086]
@@ -815,258 +1129,6 @@
         return this.all(this.rep(0, 1, this.all([this.l_nb_diff_lines, n], [this.b_chomped_last, t])), [this.l_chomped_empty, n, t]);
       }
 
-      // [183]
-      // l+block-sequence(n) ::=
-      //   ( s-indent(n+m)
-      //   c-l-block-seq-entry(n+m) )+
-      //   <for_some_fixed_auto-detected_m_>_0>
-      l_block_sequence(n) {
-        var m;
-        if (!(m = this.call([this.auto_detect_indent, n], 'number'))) {
-          return false;
-        }
-        return this.all(this.rep(1, null, this.all(this.rgx(s_indent_n(n + m)), [this.c_l_block_seq_entry, this.add(n, m)])));
-      }
-
-      // [184]
-      // c-l-block-seq-entry(n) ::=
-      //   '-' <not_followed_by_an_ns-char>
-      //   s-l+block-indented(n,block-in)
-      c_l_block_seq_entry(n) {
-        return this.all(this.chr('-'), this.chk('!', this.rgx(re_ns_char)), [this.s_l_block_indented, n, "block-in"]);
-      }
-
-      // [185]
-      // s-l+block-indented(n,c) ::=
-      //   ( s-indent(m)
-      //   ( ns-l-compact-sequence(n+1+m)
-      //   | ns-l-compact-mapping(n+1+m) ) )
-      //   | s-l+block-node(n,c)
-      //   | ( e-node s-l-comments )
-      s_l_block_indented(n, c) {
-        var m;
-        m = this.call([this.auto_detect_indent, n], 'number');
-        return this.any(this.all(this.rgx(s_indent_n(m)), this.any([this.ns_l_compact_sequence, this.add(n, this.add(1, m))], [this.ns_l_compact_mapping, this.add(n, this.add(1, m))])), [this.s_l_block_node, n, c], this.all(this.e_node, this.s_l_comments));
-      }
-
-      // [186]
-      // ns-l-compact-sequence(n) ::=
-      //   c-l-block-seq-entry(n)
-      //   ( s-indent(n) c-l-block-seq-entry(n) )*
-      ns_l_compact_sequence(n) {
-        return this.all([this.c_l_block_seq_entry, n], this.rep(0, null, this.all(this.rgx(s_indent_n(n)), [this.c_l_block_seq_entry, n])));
-      }
-
-      // [187]
-      // l+block-mapping(n) ::=
-      //   ( s-indent(n+m)
-      //   ns-l-block-map-entry(n+m) )+
-      //   <for_some_fixed_auto-detected_m_>_0>
-      l_block_mapping(n) {
-        var m;
-        if (!(m = this.call([this.auto_detect_indent, n], 'number'))) {
-          return false;
-        }
-        return this.all(this.rep(1, null, this.all(this.rgx(s_indent_n(n + m)), [this.ns_l_block_map_entry, this.add(n, m)])));
-      }
-
-      // [188]
-      // ns-l-block-map-entry(n) ::=
-      //   c-l-block-map-explicit-entry(n)
-      //   | ns-l-block-map-implicit-entry(n)
-      ns_l_block_map_entry(n) {
-        return this.any([this.c_l_block_map_explicit_entry, n], [this.ns_l_block_map_implicit_entry, n]);
-      }
-
-      // [189]
-      // c-l-block-map-explicit-entry(n) ::=
-      //   c-l-block-map-explicit-key(n)
-      //   ( l-block-map-explicit-value(n)
-      //   | e-node )
-      c_l_block_map_explicit_entry(n) {
-        return this.all([this.c_l_block_map_explicit_key, n], this.any([this.l_block_map_explicit_value, n], this.e_node));
-      }
-
-      // [190]
-      // c-l-block-map-explicit-key(n) ::=
-      //   '?'
-      //   s-l+block-indented(n,block-out)
-      c_l_block_map_explicit_key(n) {
-        return this.all(this.rgx(RegExp(`\\?${ws_lookahead}`, "y")), [this.s_l_block_indented, n, "block-out"]);
-      }
-
-      // [191]
-      // l-block-map-explicit-value(n) ::=
-      //   s-indent(n)
-      //   ':' s-l+block-indented(n,block-out)
-      l_block_map_explicit_value(n) {
-        return this.all(this.rgx(s_indent_n(n)), this.chr(':'), [this.s_l_block_indented, n, "block-out"]);
-      }
-
-      // [192]
-      // ns-l-block-map-implicit-entry(n) ::=
-      //   (
-      //   ns-s-block-map-implicit-key
-      //   | e-node )
-      //   c-l-block-map-implicit-value(n)
-      ns_l_block_map_implicit_entry(n) {
-        return this.all(this.any(this.ns_s_block_map_implicit_key, this.e_node), [this.c_l_block_map_implicit_value, n]);
-      }
-
-      // XXX Can fold into 192
-      // [193]
-      // ns-s-block-map-implicit-key ::=
-      //   c-s-implicit-json-key(block-key)
-      //   | ns-s-implicit-yaml-key(block-key)
-      ns_s_block_map_implicit_key() {
-        return this.any([this.c_s_implicit_json_key, "block-key"], [this.ns_s_implicit_yaml_key, "block-key"]);
-      }
-
-      // [194]
-      // c-l-block-map-implicit-value(n) ::=
-      //   ':' (
-      //   s-l+block-node(n,block-out)
-      //   | ( e-node s-l-comments ) )
-      c_l_block_map_implicit_value(n) {
-        return this.all(this.chr(':'), this.any([this.s_l_block_node, n, "block-out"], this.all(this.e_node, this.s_l_comments)));
-      }
-
-      // [195]
-      // ns-l-compact-mapping(n) ::=
-      //   ns-l-block-map-entry(n)
-      //   ( s-indent(n) ns-l-block-map-entry(n) )*
-      ns_l_compact_mapping(n) {
-        return this.all([this.ns_l_block_map_entry, n], this.rep(0, null, this.all(this.rgx(s_indent_n(n)), [this.ns_l_block_map_entry, n])));
-      }
-
-      // [196]
-      // s-l+block-node(n,c) ::=
-      //   s-l+block-in-block(n,c) | s-l+flow-in-block(n)
-      s_l_block_node(n, c) {
-        return this.any([this.s_l_block_in_block, n, c], [this.s_l_flow_in_block, n]);
-      }
-
-      // [197]
-      // s-l+flow-in-block(n) ::=
-      //   s-separate(n+1,flow-out)
-      //   ns-flow-node(n+1,flow-out) s-l-comments
-      s_l_flow_in_block(n) {
-        return this.all([this.s_separate, this.add(n, 1), "flow-out"], [this.ns_flow_node, this.add(n, 1), "flow-out"], this.s_l_comments);
-      }
-
-      // [198]
-      // s-l+block-in-block(n,c) ::=
-      //   s-l+block-scalar(n,c) | s-l+block-collection(n,c)
-      s_l_block_in_block(n, c) {
-        return this.any([this.s_l_block_scalar, n, c], [this.s_l_block_collection, n, c]);
-      }
-
-      // [199]
-      // s-l+block-scalar(n,c) ::=
-      //   s-separate(n+1,c)
-      //   ( c-ns-properties(n+1,c) s-separate(n+1,c) )?
-      //   ( c-l+literal(n) | c-l+folded(n) )
-      s_l_block_scalar(n, c) {
-        return this.all([this.s_separate, this.add(n, 1), c], this.rep(0, 1, this.all([this.c_ns_properties, this.add(n, 1), c], [this.s_separate, this.add(n, 1), c])), this.any([this.c_l_literal, n], [this.c_l_folded, n]));
-      }
-
-      // [200]
-      // s-l+block-collection(n,c) ::=
-      //   ( s-separate(n+1,c)
-      //   c-ns-properties(n+1,c) )?
-      //   s-l-comments
-      //   ( l+block-sequence(seq-spaces(n,c))
-      //   | l+block-mapping(n) )
-      s_l_block_collection(n, c) {
-        return this.all(this.rep(0, 1, this.all([this.s_separate, this.add(n, 1), c], this.any(this.all([this.c_ns_properties, this.add(n, 1), c], this.s_l_comments), this.all(this.c_ns_tag_property, this.s_l_comments), this.all(this.c_ns_anchor_property, this.s_l_comments)))), this.s_l_comments, this.any([this.l_block_sequence, [this.seq_spaces, n, c]], [this.l_block_mapping, n]));
-      }
-
-      // [201]
-      // seq-spaces(n,c) ::=
-      //   ( c = block-out => n-1 )
-      //   ( c = block-in => n )
-      seq_spaces(n, c) {
-        return this.flip(c, {
-          'block-in': n,
-          'block-out': this.sub(n, 1)
-        });
-      }
-
-      // [202]
-      // l-document-prefix ::=
-      //   c-byte-order-mark? l-comment*
-      l_document_prefix() {
-        return this.all(this.rep(0, 1, this.chr(c_byte_order_mark)), this.rep2(0, null, this.l_comment));
-      }
-
-      c_directives_end() {
-        return this.rgx(re_c_directives_end);
-      }
-
-      c_document_end() {
-        return this.rgx(re_c_document_end);
-      }
-
-      // [205]
-      // l-document-suffix ::=
-      //   c-document-end s-l-comments
-      l_document_suffix() {
-        return this.all(this.c_document_end, this.s_l_comments);
-      }
-
-      // [206]
-      // c-forbidden ::=
-      //   <start_of_line>
-      //   ( c-directives-end | c-document-end )
-      //   ( b-char | s-white | <end_of_file> )
-      c_forbidden() {
-        return this.rgx(RegExp(`(?:${start_of_line}(?:${c_directives_end}|${c_document_end})(?:${b_char}|${s_white}|${end_of_file}))`, "y"));
-      }
-
-      // [207]
-      // l-bare-document ::=
-      //   s-l+block-node(-1,block-in)
-      //   <excluding_c-forbidden_content>
-      l_bare_document() {
-        return this.all(this.exclude(this.c_forbidden), [this.s_l_block_node, -1, "block-in"]);
-      }
-
-      // [208]
-      // l-explicit-document ::=
-      //   c-directives-end
-      //   ( l-bare-document
-      //   | ( e-node s-l-comments ) )
-      l_explicit_document() {
-        return this.all(this.c_directives_end, this.any(this.l_bare_document, this.all(this.e_node, this.s_l_comments)));
-      }
-
-      // [209]
-      // l-directive-document ::=
-      //   l-directive+
-      //   l-explicit-document
-      l_directive_document() {
-        return this.all(this.rep(1, null, this.l_directive), this.l_explicit_document);
-      }
-
-      // [210]
-      // l-any-document ::=
-      //   l-directive-document
-      //   | l-explicit-document
-      //   | l-bare-document
-      l_any_document() {
-        return this.any(this.l_directive_document, this.l_explicit_document, this.l_bare_document);
-      }
-
-      // [211]
-      // l-yaml-stream ::=
-      //   l-document-prefix* l-any-document?
-      //   ( ( l-document-suffix+ l-document-prefix*
-      //   l-any-document? )
-      //   | ( l-document-prefix* l-explicit-document? ) )*
-      l_yaml_stream() {
-        return this.all(this.l_document_prefix, this.rep(0, 1, this.l_any_document), this.rep2(0, null, this.any(this.all(this.l_document_suffix, this.rep(0, null, this.l_document_prefix), this.rep2(0, 1, this.l_any_document)), this.all(this.l_document_prefix, this.rep(0, 1, this.l_explicit_document)))));
-      }
-
     };
 
     // Helper functions:
@@ -1076,7 +1138,7 @@
       var chars, regexp, str;
       str = String(rgx);
       if (str.match(/undefined/)) {
-        die((new Error()).stack);
+        die((new Error(`Bad regex '${rgx}'`)).stack);
       }
       if (str.endsWith('u')) {
         str = str.slice(0, -1);
@@ -1091,6 +1153,23 @@
 
     end_of_file = '$';
 
+    init = [];
+
+    // [004]
+    // document-start-indicator ::=
+    //   "---"
+    [document_start_indicator, re_document_start_indicator] = [];
+
+    init.push(function() {
+      return [document_start_indicator, re_document_start_indicator] = r(RegExp(`---${ws_lookahead}`));
+    });
+
+    // [005]
+    // document-end-indicator ::=
+    //   "..."                             # Not followed by non-ws char
+    [document_end_indicator, re_document_end_indicator] = r(/\.\.\./);
+
+    //------------------------------------------------------------------------------
     // [001]
     // c-printable ::=
     //   x:9 | x:A | x:D | [x:20-x:7E]
@@ -1412,15 +1491,10 @@
       re_l_trail_comments
     ] = r(RegExp(`${c_nb_comment_text}${b_comment}`, "u"));
 
-    // [203]
-    // c-directives-end ::=
-    //   '-' '-' '-'
-    [c_directives_end, re_c_directives_end] = r(RegExp(`---${ws_lookahead}`));
-
-    // [204]
-    // c-document-end ::=
-    //   '.' '.' '.'
-    [c_document_end, re_c_document_end] = r(/\.\.\./);
+    for (i = 0, len = init.length; i < len; i++) {
+      func = init[i];
+      func();
+    }
 
     return Grammar;
 

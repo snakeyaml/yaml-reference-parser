@@ -91,7 +91,7 @@ global.Parser = class Parser extends Grammar
     @trace_num++
     @trace '?', trace, args if TRACE
 
-    if func.name == 'l_bare_document'
+    if func.name == 'bare_document'
       @state_curr().doc = true
 
     args = args.map (a)=>
@@ -313,7 +313,7 @@ global.Parser = class Parser extends Grammar
             if i > size - 2
           state = @state[size - i++ - 1]
           state[var_] = value
-          break if state.name == 's_l_block_scalar'
+          break if state.name == 'block_scalar'
       return true
     name_ 'set', set, "set('#{var_}', #{stringify expr})"
 
@@ -451,14 +451,14 @@ global.Parser = class Parser extends Grammar
     ]
 
     noisy = [
-      'c_directives_end',
+      'document_start_indicator',
       'c_l_folded',
       'c_l_literal',
       'c_ns_alias_node',
       'c_ns_anchor_property',
       'c_ns_tag_property',
-      'l_directive_document',
-      'l_document_prefix',
+      'directives_and_document',
+      'document_prefix',
       'ns_flow_content',
       'ns_plain',
       's_l_comments',

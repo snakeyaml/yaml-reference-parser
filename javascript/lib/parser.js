@@ -113,7 +113,7 @@
       if (TRACE) {
         this.trace('?', trace, args);
       }
-      if (func.name === 'l_bare_document') {
+      if (func.name === 'bare_document') {
         this.state_curr().doc = true;
       }
       args = args.map((a) => {
@@ -442,7 +442,7 @@
             }
             state = this.state[size - i++ - 1];
             state[var_] = value;
-            if (state.name === 's_l_block_scalar') {
+            if (state.name === 'block_scalar') {
               break;
             }
           }
@@ -644,7 +644,7 @@
         return [];
       }
       small = ['b_as_line_feed', 's_indent', 'nb_char'];
-      noisy = ['c_directives_end', 'c_l_folded', 'c_l_literal', 'c_ns_alias_node', 'c_ns_anchor_property', 'c_ns_tag_property', 'l_directive_document', 'l_document_prefix', 'ns_flow_content', 'ns_plain', 's_l_comments', 's_separate'];
+      noisy = ['document_start_indicator', 'c_l_folded', 'c_l_literal', 'c_ns_alias_node', 'c_ns_anchor_property', 'c_ns_tag_property', 'directives_and_document', 'document_prefix', 'ns_flow_content', 'ns_plain', 's_l_comments', 's_separate'];
       return ((ENV.TRACE_QUIET || '').split(',')).concat(noisy);
     }
 

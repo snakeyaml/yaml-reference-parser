@@ -97,12 +97,12 @@ global.Receiver = class Receiver
     @document_start = document_start_event()
 
   #----------------------------------------------------------------------------
-  try__l_yaml_stream: ->
+  try__yaml_stream: ->
     @add stream_start_event()
     @tag_map = {}
     @document_start = document_start_event()
     delete @document_end
-  got__l_yaml_stream: ->
+  got__yaml_stream: ->
     @check_document_end()
     @add stream_end_event()
 
@@ -116,10 +116,10 @@ global.Receiver = class Receiver
   got__ns_tag_prefix: (o)->
     @tag_map[@tag_handle] = o.text
 
-  got__c_directives_end: ->
+  got__document_start_indicator: ->
     @check_document_end()
     @document_start.explicit = true
-  got__c_document_end: ->
+  got__document_end_indicator: ->
     if @document_end?
       @document_end.explicit = true
     @check_document_end()
@@ -130,36 +130,36 @@ global.Receiver = class Receiver
   got__c_flow_sequence__all__x5b: -> @add sequence_start_event true
   got__c_flow_sequence__all__x5d: -> @add sequence_end_event()
 
-  try__l_block_mapping: -> @cache_up mapping_start_event()
-  got__l_block_mapping: -> @cache_down mapping_end_event()
-  not__l_block_mapping: -> @cache_drop()
+  try__block_mapping: -> @cache_up mapping_start_event()
+  got__block_mapping: -> @cache_down mapping_end_event()
+  not__block_mapping: -> @cache_drop()
 
-  try__l_block_sequence: -> @cache_up sequence_start_event()
-  got__l_block_sequence: -> @cache_down sequence_end_event()
-  not__l_block_sequence: ->
+  try__block_sequence_context: -> @cache_up sequence_start_event()
+  got__block_sequence_context: -> @cache_down sequence_end_event()
+  not__block_sequence_context: ->
     event = @cache_drop()[0]
     @anchor = event.anchor
     @tag = event.tag
 
-  try__ns_l_compact_mapping: -> @cache_up mapping_start_event()
-  got__ns_l_compact_mapping: -> @cache_down mapping_end_event()
-  not__ns_l_compact_mapping: -> @cache_drop()
+  try__compact_mapping: -> @cache_up mapping_start_event()
+  got__compact_mapping: -> @cache_down mapping_end_event()
+  not__compact_mapping: -> @cache_drop()
 
-  try__ns_l_compact_sequence: -> @cache_up sequence_start_event()
-  got__ns_l_compact_sequence: -> @cache_down sequence_end_event()
-  not__ns_l_compact_sequence: -> @cache_drop()
+  try__compact_sequence: -> @cache_up sequence_start_event()
+  got__compact_sequence: -> @cache_down sequence_end_event()
+  not__compact_sequence: -> @cache_drop()
 
   try__ns_flow_pair: -> @cache_up mapping_start_event true
   got__ns_flow_pair: -> @cache_down mapping_end_event()
   not__ns_flow_pair: -> @cache_drop()
 
-  try__ns_l_block_map_implicit_entry: -> @cache_up()
-  got__ns_l_block_map_implicit_entry: -> @cache_down()
-  not__ns_l_block_map_implicit_entry: -> @cache_drop()
+  try__block_mapping_implicit_entry: -> @cache_up()
+  got__block_mapping_implicit_entry: -> @cache_down()
+  not__block_mapping_implicit_entry: -> @cache_drop()
 
-  try__c_l_block_map_explicit_entry: -> @cache_up()
-  got__c_l_block_map_explicit_entry: -> @cache_down()
-  not__c_l_block_map_explicit_entry: -> @cache_drop()
+  try__block_mapping_explicit_entry: -> @cache_up()
+  got__block_mapping_explicit_entry: -> @cache_down()
+  not__block_mapping_explicit_entry: -> @cache_drop()
 
   try__c_ns_flow_map_empty_key_entry: -> @cache_up()
   got__c_ns_flow_map_empty_key_entry: -> @cache_down()
@@ -257,7 +257,7 @@ global.Receiver = class Receiver
 
   got__e_node: -> @add scalar_event 'plain', ''
 
-  not__s_l_block_collection__all__rep__all__any__all: ->
+  not__block_collection__all__rep__all__any__all: ->
     delete @tag
     delete @anchor
 

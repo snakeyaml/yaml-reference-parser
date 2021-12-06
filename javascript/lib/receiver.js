@@ -169,14 +169,14 @@
     }
 
     //----------------------------------------------------------------------------
-    try__l_yaml_stream() {
+    try__yaml_stream() {
       this.add(stream_start_event());
       this.tag_map = {};
       this.document_start = document_start_event();
       return delete this.document_end;
     }
 
-    got__l_yaml_stream() {
+    got__yaml_stream() {
       this.check_document_end();
       return this.add(stream_end_event());
     }
@@ -196,12 +196,12 @@
       return this.tag_map[this.tag_handle] = o.text;
     }
 
-    got__c_directives_end() {
+    got__document_start_indicator() {
       this.check_document_end();
       return this.document_start.explicit = true;
     }
 
-    got__c_document_end() {
+    got__document_end_indicator() {
       if (this.document_end != null) {
         this.document_end.explicit = true;
       }
@@ -224,54 +224,54 @@
       return this.add(sequence_end_event());
     }
 
-    try__l_block_mapping() {
+    try__block_mapping() {
       return this.cache_up(mapping_start_event());
     }
 
-    got__l_block_mapping() {
+    got__block_mapping() {
       return this.cache_down(mapping_end_event());
     }
 
-    not__l_block_mapping() {
+    not__block_mapping() {
       return this.cache_drop();
     }
 
-    try__l_block_sequence() {
+    try__block_sequence_context() {
       return this.cache_up(sequence_start_event());
     }
 
-    got__l_block_sequence() {
+    got__block_sequence_context() {
       return this.cache_down(sequence_end_event());
     }
 
-    not__l_block_sequence() {
+    not__block_sequence_context() {
       var event;
       event = this.cache_drop()[0];
       this.anchor = event.anchor;
       return this.tag = event.tag;
     }
 
-    try__ns_l_compact_mapping() {
+    try__compact_mapping() {
       return this.cache_up(mapping_start_event());
     }
 
-    got__ns_l_compact_mapping() {
+    got__compact_mapping() {
       return this.cache_down(mapping_end_event());
     }
 
-    not__ns_l_compact_mapping() {
+    not__compact_mapping() {
       return this.cache_drop();
     }
 
-    try__ns_l_compact_sequence() {
+    try__compact_sequence() {
       return this.cache_up(sequence_start_event());
     }
 
-    got__ns_l_compact_sequence() {
+    got__compact_sequence() {
       return this.cache_down(sequence_end_event());
     }
 
-    not__ns_l_compact_sequence() {
+    not__compact_sequence() {
       return this.cache_drop();
     }
 
@@ -287,27 +287,27 @@
       return this.cache_drop();
     }
 
-    try__ns_l_block_map_implicit_entry() {
+    try__block_mapping_implicit_entry() {
       return this.cache_up();
     }
 
-    got__ns_l_block_map_implicit_entry() {
+    got__block_mapping_implicit_entry() {
       return this.cache_down();
     }
 
-    not__ns_l_block_map_implicit_entry() {
+    not__block_mapping_implicit_entry() {
       return this.cache_drop();
     }
 
-    try__c_l_block_map_explicit_entry() {
+    try__block_mapping_explicit_entry() {
       return this.cache_up();
     }
 
-    got__c_l_block_map_explicit_entry() {
+    got__block_mapping_explicit_entry() {
       return this.cache_down();
     }
 
-    not__c_l_block_map_explicit_entry() {
+    not__block_mapping_explicit_entry() {
       return this.cache_drop();
     }
 
@@ -463,7 +463,7 @@
       return this.add(scalar_event('plain', ''));
     }
 
-    not__s_l_block_collection__all__rep__all__any__all() {
+    not__block_collection__all__rep__all__any__all() {
       delete this.tag;
       return delete this.anchor;
     }
