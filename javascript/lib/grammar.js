@@ -3,7 +3,7 @@
   var Grammar;
 
   global.Grammar = Grammar = (function() {
-    var anchor_character, anchor_name, ascii_alpha_character_s, blank_character, byte_order_mark, comment_content, decimal_digit, decimal_digit_s, directive_name, directive_parameter, document_end_indicator, document_start_indicator, double_quoted_one_line, double_quoted_scalar_escape_character, end_of_file, flow_collection_indicator, flow_collection_indicator_s, global_tag_prefix, hexadecimal_digit, i, i004, i051, i080, i081, i083, i084, i091, i092, i093, i094, i095, i096, i119, i123, i127, i128, i130, i131, i132, i133, i135, i136, i139, i140, i142, i143, i145, i146, i147, i148, i149, i150, i151, i152, i153, i154, i155, i156, i157, i158, i159, i160, i161, i162, i163, i164, init, json_character, len, line_break, line_ending, local_tag_prefix, named_tag_handle, non_break_character, non_break_double_quoted_character, non_break_single_quoted_character, non_space_character, non_space_double_quoted_character, non_space_single_quoted_character, non_specific_tag, primary_tag_handle, r, re_break_as_line_feed, re_break_as_space, re_decimal_digit_1_9, re_document_end_indicator, re_document_start_indicator, re_double_quoted_first_line, re_line_break, re_line_ending, re_line_trail_comments, re_non_break_character, re_non_space_character, re_non_space_double_quoted_character, re_separation_lines, re_single_quoted_first_line, re_single_quoted_next_line, re_single_quoted_one_line, re_tag_handle, ref, secondary_tag_handle, separation_lines, shorthand_tag, single_quoted_escaped_single_quote, single_quoted_first_line, space_character, start_of_line, tag_char, tag_handle, uri_character, verbatim_tag, word_character, word_character_s, ws_lookahead, yaml_character;
+    var anchor_character, anchor_name, ascii_alpha_character_s, blank_character, byte_order_mark, comment_content, decimal_digit, decimal_digit_s, directive_name, directive_parameter, document_end_indicator, document_start_indicator, double_quoted_scalar_escape_character, end_of_file, flow_collection_indicator, flow_collection_indicator_s, global_tag_prefix, hexadecimal_digit, i, i004, i051, i083, i084, i091, i092, i093, i094, i095, i096, i118b, i119, i123, i127, i128, i130, i131, i132, i133, i135, i136, i139, i140, i142, i143, i145, i146, i147, i148, i149, i150, i151, i152, i153, i154, i155, i156, i157, i158, i159, i160, i161, i162, i163, i164, init, json_character, l_comment, len, line_break, line_ending, local_tag_prefix, named_tag_handle, non_break_character, non_break_double_quoted_character, non_break_single_quoted_character, non_space_character, non_space_double_quoted_character, non_space_single_quoted_character, non_specific_tag, primary_tag_handle, r, re_break_as_line_feed, re_break_as_space, re_decimal_digit_1_9, re_document_end_indicator, re_document_start_indicator, re_l_comment, re_line_break, re_line_ending, re_line_trail_comments, re_non_break_character, re_non_space_character, re_non_space_double_quoted_character, re_separation_blanks, re_single_quoted_first_line, re_single_quoted_next_line, re_single_quoted_one_line, re_tag_handle, re_ws_lookahead, ref, secondary_tag_handle, separation_blanks, shorthand_tag, single_quoted_escaped_single_quote, single_quoted_first_line, space_character, start_of_line, tag_char, tag_handle, uri_character, verbatim_tag, word_character, word_character_s, ws_lookahead, yaml_character;
 
     class Grammar {
       // Grammar rules:
@@ -33,8 +33,18 @@
       // document-prefix ::=
       //   byte-order-mark?
       //   comment-line*
+
+        // TODO
+      //   re_document_prefix = ''
+
+      //   i002 = ->
+      //     [, re_document_prefix] = r ///
+      //       #{byte_order_mark}?
+      //       #{l_comment}*
+      //     ///u
       document_prefix() {
-        return this.all(this.rep(0, 1, this.chr(byte_order_mark)), this.rep(0, null, this.l_comment));
+        //     @rgx(re_document_prefix)
+        return this.all(this.rep(0, 1, this.chr(byte_order_mark)), this.rep(0, null, this.comment_line));
       }
 
       // [003]
@@ -483,7 +493,7 @@
       //     | line-ending
       //   )
       block_scalar_indicator(n) {
-        return this.all(this.any(this.all([this.block_scalar_indentation_indicator, n], this.block_scalar_chomping_indicator, this.rgx(ws_lookahead)), this.all(this.block_scalar_chomping_indicator, [this.block_scalar_indentation_indicator, n], this.rgx(ws_lookahead))), this.comment_line);
+        return this.all(this.any(this.all([this.block_scalar_indentation_indicator, n], this.block_scalar_chomping_indicator, this.ws_lookahead), this.all(this.block_scalar_chomping_indicator, [this.block_scalar_indentation_indicator, n], this.ws_lookahead)), this.comment_line);
       }
 
       // [045]
@@ -680,7 +690,7 @@
       //     | empty-node
       //   )
       flow_mapping_separate_value(n, c) {
-        return this.all(this.chr(':'), this.chk('!', [this.non_space_plain_scalar_character, c]), this.any(this.all([this.separation_characters, n, c], [this.flow_node, n, c]), this.empty_node));
+        return this.all(this.rgx(RegExp(`(?::(?!${this.non_space_plain_scalar_character(c)}))`, "yu")), this.any(this.all([this.separation_characters, n, c], [this.flow_node, n, c]), this.empty_node));
       }
 
       // [64]
@@ -754,7 +764,7 @@
       //   separation-blanks?
       //   /* At most 1024 characters altogether */
       implicit_yaml_key(c) {
-        return this.all(this.max(1024), [this.flow_yaml_node, null, c], this.rep(0, 1, this.rgx(re_separation_lines)));
+        return this.all(this.max(1024), [this.flow_yaml_node, null, c], this.rep(0, 1, this.separation_blanks));
       }
 
       // [71]
@@ -763,7 +773,7 @@
       //   separation-blanks?
       //   /* At most 1024 characters altogether */
       implicit_json_key(c) {
-        return this.all(this.max(1024), [this.flow_json_node, null, c], this.rep(0, 1, this.rgx(re_separation_lines)));
+        return this.all(this.max(1024), [this.flow_json_node, null, c], this.rep(0, 1, this.separation_blanks));
       }
 
       // [72]
@@ -842,9 +852,9 @@
       // double-quoted-text(n,FLOW-IN)   ::= double-quoted-multi-line(n)
       double_quoted_text(n, c) {
         return this.case(c, {
-          'block-key': this.rgx(double_quoted_one_line),
+          'block-key': this.double_quoted_one_line,
           'flow-in': [this.double_quoted_multi_line, n],
-          'flow-key': this.rgx(double_quoted_one_line),
+          'flow-key': this.double_quoted_one_line,
           'flow-out': [this.double_quoted_multi_line, n]
         });
       }
@@ -857,7 +867,24 @@
       //     | blank-character*
       //   )
       double_quoted_multi_line(n) {
-        return this.all(this.rgx(re_double_quoted_first_line), this.any([this.double_quoted_next_line, n], this.rgx(`${blank_character}*`)));
+        return this.all(this.double_quoted_first_line, this.any([this.double_quoted_next_line, n], this.rgx(`${blank_character}*`)));
+      }
+
+      // [80]
+      // double-quoted-one-line ::=
+      //   non-break-double-quoted-character*
+      double_quoted_one_line() {
+        return this.rgx(RegExp(`${non_break_double_quoted_character}*`, "yu"));
+      }
+
+      // [81]
+      // double-quoted-first-line ::=
+      //   (
+      //     blank-character*
+      //     non-space-double-quoted-character
+      //   )*
+      double_quoted_first_line() {
+        return this.rgx(RegExp(`(?:${blank_character}*${non_space_double_quoted_character})*`, "yu"));
       }
 
       // [82]
@@ -875,7 +902,11 @@
       //     )
       //   )?
       double_quoted_next_line(n) {
-        return this.all(this.any([this.double_quoted_line_continuation, n], [this.flow_folded_whitespace, n]), this.rep(0, 1, this.all(this.rgx(re_non_space_double_quoted_character), this.rgx(re_double_quoted_first_line), this.any([this.double_quoted_next_line, n], this.rgx(`${blank_character}*`)))));
+        return this.all(this.any([this.double_quoted_line_continuation, n], [this.flow_folded_whitespace, n]), this.rep(0, 1, this.all(this.non_space_double_quoted_character, this.double_quoted_first_line, this.any([this.double_quoted_next_line, n], this.rgx(`${blank_character}*`)))));
+      }
+
+      non_space_double_quoted_character() {
+        return this.rgx(re_non_space_double_quoted_character);
       }
 
       // [85]
@@ -1001,7 +1032,7 @@
       //     plain-scalar-characters(c)
       //   )*
       plain_scalar_line_characters(c) {
-        return this.rep(0, null, this.all(this.rgx(`${blank_character}*`), [this.plain_scalar_characters, c]));
+        return this.rgx(RegExp(`(?:${blank_character}*${this.plain_scalar_characters_re(c)})*`, "yu"));
       }
 
       // [102]
@@ -1033,8 +1064,8 @@
       //       [ lookahead = non-space-plain-scalar-character(c) ]
       //     )
       plain_scalar_first_character(c) {
-        return this.any(this.rgx(RegExp(`(?![-?:,[\\]{}\\x23&*!|>'"%@\`])${non_space_character // '#'
-}`, "yu")), this.all(this.rgx(/[?:-]/y), this.chk('=', [this.non_space_plain_scalar_character, c])));
+        return this.any(this.rgx(RegExp(`(?:(?![-?:,[\\]{}\\x23&*!|>'"%@\`])${non_space_character // '#'
+}|(?:[?:-](?=${this.non_space_plain_scalar_character(c)})))`, "yu")));
       }
 
       // [103]
@@ -1052,23 +1083,15 @@
       //       ':'
       //       [ lookahead = non-space-plain-scalar-character(c) ]
       //     )
+      plain_scalar_characters_re(c) {
+        var non_space_plain_scalar_character, plain_scalar_characters;
+        non_space_plain_scalar_character = this.non_space_plain_scalar_character(c);
+        [plain_scalar_characters] = r(RegExp(`(?:(?:(?![:\\x23])${non_space_plain_scalar_character})|(?:(?<=${non_space_character})\\x23)|(?::(?=${non_space_plain_scalar_character})))`, "u"));
+        return plain_scalar_characters;
+      }
 
-        // TODO
-      //   plain_scalar_characters = (c)->
-      //     non_space_plain_scalar_character = ...
-      //     ///
-      //       (?:
-      //         (?:
-      //           (?!
-      //             [
-      //               :
-      //               \x23        # '#'
-      //             ]
-      //           )
-
-      //     ///yu
       plain_scalar_characters(c) {
-        return this.any(this.but([this.non_space_plain_scalar_character, c], this.chr(':'), this.chr('#')), this.all(this.chk('<=', this.rgx(re_non_space_character)), this.chr('#')), this.all(this.chr(':'), this.chk('=', [this.non_space_plain_scalar_character, c])));
+        return this.rgx(RegExp(`${this.plain_scalar_characters_re(c)}`, "yu"));
       }
 
       // [104]
@@ -1077,19 +1100,25 @@
       // non-space-plain-scalar-character(BLOCK-KEY) ::= block-plain-scalar-character
       // non-space-plain-scalar-character(FLOW-KEY)  ::= flow-plain-scalar-character
       non_space_plain_scalar_character(c) {
-        return this.case(c, {
-          'block-key': this.block_plain_scalar_character,
-          'flow-in': this.flow_plain_scalar_character,
-          'flow-key': this.flow_plain_scalar_character,
-          'flow-out': this.block_plain_scalar_character
-        });
+        switch (c) {
+          case 'block-key':
+            return this.block_plain_scalar_character();
+          case 'flow-in':
+            return this.flow_plain_scalar_character();
+          case 'flow-key':
+            return this.flow_plain_scalar_character();
+          case 'flow-out':
+            return this.block_plain_scalar_character();
+        }
       }
 
       // [105]
       // block-plain-scalar-character ::=
       //   non-space-character
       block_plain_scalar_character() {
-        return this.rgx(RegExp(`(?:${non_space_character})`, "yu"));
+        var re;
+        [re] = r(RegExp(`(?:${non_space_character})`, "u"));
+        return re;
       }
 
       // [106]
@@ -1097,7 +1126,9 @@
       //     non-space-characters
       //   - flow-collection-indicators
       flow_plain_scalar_character() {
-        return this.rgx(RegExp(`(?:(?!${flow_collection_indicator})${non_space_character})`, "yu"));
+        var re;
+        [re] = r(RegExp(`(?:(?!${flow_collection_indicator})${non_space_character})`, "u"));
+        return re;
       }
 
       // [107]
@@ -1175,7 +1206,7 @@
       //   indentation-spaces(n)
       //   separation-blanks?
       indentation_spaces_plus_maybe_more(n) {
-        return this.all(this.indentation_spaces_n(n), this.rep(0, 1, this.rgx(re_separation_lines)));
+        return this.all(this.indentation_spaces_n(n), this.rep(0, 1, this.separation_blanks));
       }
 
       // [115]
@@ -1184,7 +1215,7 @@
       //   folded-whitespace(n,FLOW-IN)
       //   indentation-spaces-plus-maybe-more(n)
       flow_folded_whitespace(n) {
-        return this.all(this.rep(0, 1, this.rgx(re_separation_lines)), [this.folded_whitespace, n, "flow-in"], [this.indentation_spaces_plus_maybe_more, n]);
+        return this.all(this.rep(0, 1, this.separation_blanks), [this.folded_whitespace, n, "flow-in"], [this.indentation_spaces_plus_maybe_more, n]);
       }
 
       // [116]
@@ -1199,7 +1230,13 @@
         return this.any(this.all(this.rgx(re_line_break), this.rep(1, null, [this.empty_line, n, c])), this.rgx(re_break_as_space));
       }
 
-      // [117]
+      //------------------------------------------------------------------------------
+      // TODO Comments need attention.
+      // The translation from 1.2.2 to 1.3.0 may be wrong.
+      // https://yaml.org/spec/1.2.2/#rule-s-b-comment 77, 78, 79
+      // https://spec.yaml.io/main/spec/1.3.0/#rule-comment-lines 117, 118
+
+        // [117]
       // comment-lines ::=
       //     comment-line+
       //   | <start-of-line>
@@ -1207,16 +1244,23 @@
         return this.all(this.any(this.comment_line, this.start_of_line), this.rep(0, null, this.l_comment));
       }
 
+      // XXX from [77] s-b-comment
       // [118]
       // comment-line ::=
       //   separation-blanks
       //   comment-content?
       //   line-ending
       comment_line() {
-        return this.all(this.rep(0, 1, this.all(this.rgx(re_separation_lines), this.rgx(RegExp(`${comment_content}?`, "yu"), true))), this.rgx(re_line_ending, true));
+        return this.all(this.rep(0, 1, this.all(this.separation_blanks, this.rgx(RegExp(`${comment_content}?`, "yu"), true))), this.rgx(re_line_ending, true));
       }
 
-      // [120]
+      l_comment() {
+        return this.rgx(re_l_comment);
+      }
+
+      //------------------------------------------------------------------------------
+
+        // [120]
       // empty-line(n,c) ::=
       //   (
       //       line-prefix-spaces(n,c)
@@ -1237,16 +1281,27 @@
       separation_characters(n, c) {
         return this.case(c, {
           'block-in': [this.separation_lines, n],
-          'block-key': this.rgx(re_separation_lines),
+          'block-key': this.separation_blanks(),
           'block-out': [this.separation_lines, n],
           'flow-in': [this.separation_lines, n],
-          'flow-key': this.rgx(re_separation_lines),
+          'flow-key': this.separation_blanks(),
           'flow-out': [this.separation_lines, n]
         });
       }
 
+      // [122]
+      // separation-lines(n) ::=
+      //     (
+      //       comment-lines
+      //       indentation-spaces-plus-maybe-more(n)
+      //     )
+      //   | separation-blanks
       separation_lines(n) {
-        return this.any(this.all(this.comment_lines, [this.indentation_spaces_plus_maybe_more, n]), this.rgx(re_separation_lines));
+        return this.any(this.all(this.comment_lines, [this.indentation_spaces_plus_maybe_more, n]), this.separation_blanks);
+      }
+
+      separation_blanks() {
+        return this.rgx(re_separation_blanks);
       }
 
       // [124]
@@ -1255,7 +1310,7 @@
       //   separation-blanks
       //   yaml-version-number
       yaml_directive_line() {
-        return this.all(this.rgx(RegExp(`(?:YAML${separation_lines})`, "y")), this.yaml_version_number);
+        return this.all(this.rgx(RegExp(`(?:YAML${separation_blanks})`, "y")), this.yaml_version_number);
       }
 
       // [125]
@@ -1275,7 +1330,7 @@
       //     directive-parameter
       //   )*
       reserved_directive_line() {
-        return this.rgx(RegExp(`${directive_name}(?:${separation_lines}${directive_parameter})*`, "yu"));
+        return this.rgx(RegExp(`${directive_name}(?:${separation_blanks}${directive_parameter})*`, "yu"));
       }
 
       // [129]
@@ -1286,7 +1341,7 @@
       //   separation-blanks
       //   tag-prefix
       tag_directive_line() {
-        return this.all(this.rgx(RegExp(`TAG${separation_lines}`, "y")), this.tag_handle, this.rgx(re_separation_lines), this.tag_prefix);
+        return this.all(this.rgx(RegExp(`TAG${separation_blanks}`, "y")), this.tag_handle, this.separation_blanks, this.tag_prefix);
       }
 
       tag_handle() {
@@ -1338,16 +1393,8 @@
         return this.rgx(RegExp(`(?:${verbatim_tag}|${shorthand_tag}|${non_specific_tag})`, "y"));
       }
 
-      //------------------------------------------------------------------------------
-
-        // XXX Not sure if this can be replaced by s_b_comment:
-
-        // [x078]
-      // l-comment ::=
-      //   s-separate-in-line c-nb-comment-text?
-      //   b-comment
-      l_comment() {
-        return this.all(this.rgx(re_separation_lines), this.rgx(RegExp(`${comment_content}*${line_ending}`, "yu")));
+      ws_lookahead() {
+        return this.rgx(re_ws_lookahead);
       }
 
     };
@@ -1372,7 +1419,7 @@
 
     start_of_line = '^';
 
-    end_of_file = '$';
+    end_of_file = '(?!.|\\n)';
 
     // [004]
     // document-start-indicator ::=
@@ -1398,27 +1445,6 @@
 
     i051 = function() {
       return [, re_line_trail_comments] = r(RegExp(`${comment_content}${line_ending}`, "u"));
-    };
-
-    // [80]
-    // double-quoted-one-line ::=
-    //   non-break-double-quoted-character*
-    double_quoted_one_line = '';
-
-    i080 = function() {
-      return [, double_quoted_one_line] = r(RegExp(`${non_break_double_quoted_character}*`));
-    };
-
-    // [81]
-    // double-quoted-first-line ::=
-    //   (
-    //     blank-character*
-    //     non-space-double-quoted-character
-    //   )*
-    re_double_quoted_first_line = '';
-
-    i081 = function() {
-      return [, re_double_quoted_first_line] = r(RegExp(`(?:${blank_character}*${non_space_double_quoted_character})*`));
     };
 
     // [83]
@@ -1515,6 +1541,18 @@
       return [single_quoted_escaped_single_quote] = r(/''/);
     };
 
+    // XXX from [78] l-comment
+    // [i118b]
+    // l-comment ::=
+    //   s-separate-in-line
+    //   c-nb-comment-text?
+    //   b-comment
+    [l_comment, re_l_comment] = [];
+
+    i118b = function() {
+      return [l_comment, re_l_comment] = r(RegExp(`${separation_blanks}${comment_content}*${line_ending}`, "u"));
+    };
+
     // [119]
     // comment-content ::=
     //   '#'
@@ -1525,17 +1563,14 @@
       return [comment_content] = r(RegExp(`(?:\\x23${non_break_character}*)`, "u"));
     };
 
-    // [122]
-    // separation-lines(n) ::=
-    //     (
-    //       comment-lines
-    //       indentation-spaces-plus-maybe-more(n)
-    //     )
-    //   | separation-blanks
-    [separation_lines, re_separation_lines] = [];
+    // [123]
+    // separation-blanks ::=
+    //     blank-character+
+    //   | <start-of-line>
+    [separation_blanks, re_separation_blanks] = [];
 
     i123 = function() {
-      return [separation_lines, re_separation_lines] = r(RegExp(`(?:${blank_character}+|${start_of_line})`));
+      return [separation_blanks, re_separation_blanks] = r(RegExp(`(?:${blank_character}+|${start_of_line})`));
     };
 
     // [127]
@@ -1724,11 +1759,11 @@
     // blank-character ::=
     //     x20                             # Space
     //   | x09                             # Tab
-    [blank_character, ws_lookahead] = [];
+    [blank_character, ws_lookahead, re_ws_lookahead] = [];
 
     i150 = function() {
       [blank_character] = r(RegExp(`[${space_character}\\t]`));
-      return [ws_lookahead] = r(RegExp(`(?=${end_of_file}|${blank_character}|${line_break})`));
+      return [ws_lookahead, re_ws_lookahead] = r(RegExp(`(?=${end_of_file}|${blank_character}|${line_break})`));
     };
 
     // [151]
@@ -1925,9 +1960,11 @@
       return [, , ascii_alpha_character_s] = r(/[A-Za-z]/);
     };
 
-    ref = [i146, i147, i145, i156, i155, i154, i162, i163, i151, i150, i149, i148, i161, i164, i160, i159, i158, i157, i153, i152, i123, i133, i132, i131, i130, i135, i136, i142, i143, i140, i139, i128, i127, i119, i051, i096, i095, i094, i091, i092, i093, i084, i083, i081, i080, i004];
+    ref = [i146, i147, i145, i156, i155, i154, i162, i163, i151, i150, i149, i148, i161, i164, i160, i159, i158, i157, i153, i152, i123, i133, i132, i131, i130, i135, i136, i142, i143, i140, i139, i128, i127, i119, i118b, i051, i096, i095, i094, i091, i092, i093, i084, i083, i004];
     for (i = 0, len = ref.length; i < len; i++) {
       init = ref[i];
+      //------------------------------------------------------------------------------
+
       // Call the variable initialization functions in the order needed for
       // JavaScript to be correct.
       init();
@@ -1936,5 +1973,7 @@
     return Grammar;
 
   }).call(this);
+
+  //     i002
 
 }).call(this);

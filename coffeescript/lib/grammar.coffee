@@ -14,7 +14,7 @@ global.Grammar = class Grammar
     return [ str, regexp, chars ]
 
   start_of_line = '^'
-  end_of_file = '$'
+  end_of_file = '(?!.|\\n)'
 
 
   # Grammar rules:
@@ -64,10 +64,20 @@ global.Grammar = class Grammar
   #   byte-order-mark?
   #   comment-line*
 
+# TODO
+#   re_document_prefix = ''
+#
+#   i002 = ->
+#     [, re_document_prefix] = r ///
+#       #{byte_order_mark}?
+#       #{l_comment}*
+#     ///u
+
   document_prefix: ->
+#     @rgx(re_document_prefix)
     @all(
       @rep(0, 1, @chr(byte_order_mark))
-      @rep(0, null, @l_comment)
+      @rep(0, null, @comment_line)
     )
 
 
@@ -887,12 +897,12 @@ global.Grammar = class Grammar
         @all(
           [ @block_scalar_indentation_indicator, n ]
           @block_scalar_chomping_indicator
-          @rgx(ws_lookahead)
+          @ws_lookahead
         )
         @all(
           @block_scalar_chomping_indicator
           [ @block_scalar_indentation_indicator, n ]
-          @rgx(ws_lookahead)
+          @ws_lookahead
         )
       )
       @comment_line
@@ -1234,8 +1244,12 @@ global.Grammar = class Grammar
 
   flow_mapping_separate_value: (n, c)->
     @all(
-      @chr(':')
-      @chk('!', [ @non_space_plain_scalar_character, c ])
+      @rgx(///
+        (?:
+          :
+          (?! #{@non_space_plain_scalar_character(c)} )
+        )
+      ///yu)
       @any(
         @all(
           [ @separation_characters, n, c ]
@@ -1372,7 +1386,7 @@ global.Grammar = class Grammar
     @all(
       @max(1024)
       [ @flow_yaml_node, null, c ]
-      @rep(0, 1, @rgx(re_separation_lines))
+      @rep(0, 1, @separation_blanks)
     )
 
 
@@ -1387,7 +1401,7 @@ global.Grammar = class Grammar
     @all(
       @max(1024)
       [ @flow_json_node, null, c ]
-      @rep(0, 1, @rgx(re_separation_lines))
+      @rep(0, 1, @separation_blanks)
     )
 
 
@@ -1524,9 +1538,9 @@ global.Grammar = class Grammar
 
   double_quoted_text: (n, c)->
     @case c,
-      'block-key': @rgx(double_quoted_one_line)
+      'block-key': @double_quoted_one_line
       'flow-in': [ @double_quoted_multi_line, n ]
-      'flow-key': @rgx(double_quoted_one_line)
+      'flow-key': @double_quoted_one_line
       'flow-out': [ @double_quoted_multi_line, n ]
 
 
@@ -1541,7 +1555,7 @@ global.Grammar = class Grammar
 
   double_quoted_multi_line: (n)->
     @all(
-      @rgx(re_double_quoted_first_line)
+      @double_quoted_first_line
       @any(
         [ @double_quoted_next_line, n ]
         @rgx("#{blank_character}*")
@@ -1554,12 +1568,10 @@ global.Grammar = class Grammar
   # double-quoted-one-line ::=
   #   non-break-double-quoted-character*
 
-  double_quoted_one_line = ''
-
-  i080 = ->
-    [, double_quoted_one_line] = r ///
+  double_quoted_one_line: ->
+    @rgx(///
       #{non_break_double_quoted_character}*
-    ///
+    ///yu)
 
 
 
@@ -1570,15 +1582,13 @@ global.Grammar = class Grammar
   #     non-space-double-quoted-character
   #   )*
 
-  re_double_quoted_first_line = ''
-
-  i081 = ->
-    [, re_double_quoted_first_line] = r ///
+  double_quoted_first_line: ->
+    @rgx(///
       (?:
         #{blank_character}*
         #{non_space_double_quoted_character}
       )*
-    ///
+    ///yu)
 
 
 
@@ -1605,8 +1615,8 @@ global.Grammar = class Grammar
       )
       @rep(0, 1,
         @all(
-          @rgx(re_non_space_double_quoted_character)
-          @rgx(re_double_quoted_first_line)
+          @non_space_double_quoted_character
+          @double_quoted_first_line
           @any(
             [ @double_quoted_next_line, n ]
             @rgx("#{blank_character}*")
@@ -1629,6 +1639,9 @@ global.Grammar = class Grammar
       (?! #{blank_character})
       #{non_break_double_quoted_character}
     ///
+
+  non_space_double_quoted_character: ->
+    @rgx(re_non_space_double_quoted_character)
 
 
 
@@ -1941,12 +1954,12 @@ global.Grammar = class Grammar
   #   )*
 
   plain_scalar_line_characters: (c)->
-    @rep(0, null,
-      @all(
-        @rgx("#{blank_character}*")
-        [ @plain_scalar_characters, c ]
-      )
-    )
+    @rgx(///
+      (?:
+        #{blank_character}*
+        #{@plain_scalar_characters_re(c)}
+      )*
+    ///yu)
 
 
 
@@ -1982,41 +1995,41 @@ global.Grammar = class Grammar
   plain_scalar_first_character: (c)->
     @any(
       @rgx(///
-        (?!
-          [
-            -
-            ?
-            :
-            ,
+        (?:
+          (?!
             [
-            \]
-            {
-            }
-            \x23     # '#'
-            &
-            *
-            !
-            |
-            >
-            '
-            "
-            %
-            @
-            `
-          ]
+              -
+              ?
+              :
+              ,
+              [
+              \]
+              {
+              }
+              \x23     # '#'
+              &
+              *
+              !
+              |
+              >
+              '
+              "
+              %
+              @
+              `
+            ]
+          )
+          #{non_space_character}
+        | (?:
+            [
+              ?
+              :
+              -
+            ]
+            (?= #{@non_space_plain_scalar_character(c)} )
+          )
         )
-        #{non_space_character}
       ///yu)
-      @all(
-        @rgx(///
-          [
-            ?
-            :
-            -
-          ]
-        ///y)
-        @chk('=', [ @non_space_plain_scalar_character, c ])
-      )
     )
 
 
@@ -2037,37 +2050,28 @@ global.Grammar = class Grammar
   #       [ lookahead = non-space-plain-scalar-character(c) ]
   #     )
 
-# TODO
-#   plain_scalar_characters = (c)->
-#     non_space_plain_scalar_character = ...
-#     ///
-#       (?:
-#         (?:
-#           (?!
-#             [
-#               :
-#               \x23        # '#'
-#             ]
-#           )
-# 
-#     ///yu
+  plain_scalar_characters_re: (c)->
+    non_space_plain_scalar_character = @non_space_plain_scalar_character(c)
+    [plain_scalar_characters] = r ///
+      (?:
+        (?:
+          (?! [ : \x23 ] )
+          #{non_space_plain_scalar_character}
+        )
+      | (?:
+          (?<= #{non_space_character} )
+          \x23
+        )
+      | (?:
+          :
+          (?= #{non_space_plain_scalar_character} )
+        )
+      )
+    ///u
+    plain_scalar_characters
 
   plain_scalar_characters: (c)->
-    @any(
-      @but(
-        [ @non_space_plain_scalar_character, c ]
-        @chr(':')
-        @chr('#')
-      )
-      @all(
-        @chk('<=', @rgx(re_non_space_character))
-        @chr('#')
-      )
-      @all(
-        @chr(':')
-        @chk('=', [ @non_space_plain_scalar_character, c ])
-      )
-    )
+    @rgx(/// #{@plain_scalar_characters_re(c)} ///yu)
 
 
 
@@ -2078,11 +2082,11 @@ global.Grammar = class Grammar
   # non-space-plain-scalar-character(FLOW-KEY)  ::= flow-plain-scalar-character
 
   non_space_plain_scalar_character: (c)->
-    @case c,
-      'block-key': @block_plain_scalar_character
-      'flow-in': @flow_plain_scalar_character
-      'flow-key': @flow_plain_scalar_character
-      'flow-out': @block_plain_scalar_character
+    switch c
+      when 'block-key' then @block_plain_scalar_character()
+      when 'flow-in'   then @flow_plain_scalar_character()
+      when 'flow-key'  then @flow_plain_scalar_character()
+      when 'flow-out'  then @block_plain_scalar_character()
 
 
 
@@ -2091,9 +2095,10 @@ global.Grammar = class Grammar
   #   non-space-character
 
   block_plain_scalar_character: ->
-    @rgx(///
+    [re] = r ///
       (?: #{non_space_character} )
-    ///yu)
+    ///u
+    re
 
 
 
@@ -2103,14 +2108,15 @@ global.Grammar = class Grammar
   #   - flow-collection-indicators
 
   flow_plain_scalar_character: ->
-    @rgx(///
+    [re] = r ///
       (?:
         (?!
           #{flow_collection_indicator}
         )
         #{non_space_character}
       )
-    ///yu)
+    ///u
+    re
 
 
 
@@ -2214,7 +2220,7 @@ global.Grammar = class Grammar
   indentation_spaces_plus_maybe_more: (n)->
     @all(
       @indentation_spaces_n(n)
-      @rep(0, 1, @rgx(re_separation_lines))
+      @rep(0, 1, @separation_blanks)
     )
 
 
@@ -2227,7 +2233,7 @@ global.Grammar = class Grammar
 
   flow_folded_whitespace: (n)->
     @all(
-      @rep(0, 1, @rgx(re_separation_lines))
+      @rep(0, 1, @separation_blanks)
       [ @folded_whitespace, n, "flow-in" ]
       [ @indentation_spaces_plus_maybe_more, n ]
     )
@@ -2254,6 +2260,12 @@ global.Grammar = class Grammar
 
 
 
+#------------------------------------------------------------------------------
+  # TODO Comments need attention.
+  # The translation from 1.2.2 to 1.3.0 may be wrong.
+  # https://yaml.org/spec/1.2.2/#rule-s-b-comment 77, 78, 79
+  # https://spec.yaml.io/main/spec/1.3.0/#rule-comment-lines 117, 118
+
   # [117]
   # comment-lines ::=
   #     comment-line+
@@ -2269,7 +2281,7 @@ global.Grammar = class Grammar
     )
 
 
-
+  # XXX from [77] s-b-comment
   # [118]
   # comment-line ::=
   #   separation-blanks
@@ -2280,12 +2292,33 @@ global.Grammar = class Grammar
     @all(
       @rep(0, 1,
         @all(
-          @rgx(re_separation_lines)
+          @separation_blanks
           @rgx(/// #{comment_content}? ///yu, true)
         )
       )
       @rgx(re_line_ending, true)
     )
+
+
+
+  # XXX from [78] l-comment
+  # [i118b]
+  # l-comment ::=
+  #   s-separate-in-line
+  #   c-nb-comment-text?
+  #   b-comment
+
+  [l_comment, re_l_comment] = []
+
+  i118b = ->
+    [l_comment, re_l_comment] = r ///
+      #{separation_blanks}
+      #{comment_content}*
+      #{line_ending}
+    ///u
+
+  l_comment: ->
+    @rgx(re_l_comment)
 
 
 
@@ -2303,6 +2336,7 @@ global.Grammar = class Grammar
         #{non_break_character}*
       )
     ///u
+#------------------------------------------------------------------------------
 
 
 
@@ -2336,10 +2370,10 @@ global.Grammar = class Grammar
   separation_characters: (n, c)->
     @case c,
       'block-in': [ @separation_lines, n ]
-      'block-key': @rgx(re_separation_lines)
+      'block-key': @separation_blanks()
       'block-out': [ @separation_lines, n ]
       'flow-in': [ @separation_lines, n ]
-      'flow-key': @rgx(re_separation_lines)
+      'flow-key': @separation_blanks()
       'flow-out': [ @separation_lines, n ]
 
 
@@ -2352,24 +2386,33 @@ global.Grammar = class Grammar
   #     )
   #   | separation-blanks
 
-  [separation_lines, re_separation_lines] = []
-
-  i123 = ->
-    [separation_lines, re_separation_lines] = r ///
-      (?:
-        #{blank_character}+
-      | #{start_of_line}
-      )
-    ///
-
   separation_lines: (n)->
     @any(
       @all(
         @comment_lines
         [ @indentation_spaces_plus_maybe_more, n ]
       )
-      @rgx(re_separation_lines)
+      @separation_blanks
     )
+
+
+  # [123]
+  # separation-blanks ::=
+  #     blank-character+
+  #   | <start-of-line>
+
+  [separation_blanks, re_separation_blanks] = []
+
+  i123 = ->
+    [separation_blanks, re_separation_blanks] = r ///
+      (?:
+        #{blank_character}+
+      | #{start_of_line}
+      )
+    ///
+
+  separation_blanks: ->
+    @rgx(re_separation_blanks)
 
 
 
@@ -2384,7 +2427,7 @@ global.Grammar = class Grammar
       @rgx(///
         (?:
           Y A M L
-          #{separation_lines}
+          #{separation_blanks}
         )
       ///y)
       @yaml_version_number
@@ -2419,7 +2462,7 @@ global.Grammar = class Grammar
     @rgx(///
       #{directive_name}
       (?:
-        #{separation_lines}
+        #{separation_blanks}
         #{directive_parameter}
       )*
     ///yu)
@@ -2464,10 +2507,10 @@ global.Grammar = class Grammar
     @all(
       @rgx(///
         T A G
-        #{separation_lines}
+        #{separation_blanks}
       ///y)
       @tag_handle
-      @rgx(re_separation_lines)
+      @separation_blanks
       @tag_prefix
     )
 
@@ -2837,7 +2880,7 @@ global.Grammar = class Grammar
   #     x20                             # Space
   #   | x09                             # Tab
 
-  [blank_character, ws_lookahead] = []
+  [blank_character, ws_lookahead, re_ws_lookahead] = []
 
   i150 = ->
     [blank_character] = r ///
@@ -2847,13 +2890,16 @@ global.Grammar = class Grammar
       ]
     ///
 
-    [ws_lookahead] = r ///
+    [ws_lookahead, re_ws_lookahead] = r ///
       (?=
         #{end_of_file}
       | #{blank_character}
       | #{line_break}
       )
     ///
+
+  ws_lookahead: ->
+    @rgx(re_ws_lookahead)
 
 
 
@@ -3192,24 +3238,6 @@ global.Grammar = class Grammar
 #------------------------------------------------------------------------------
 
 
-  # XXX Not sure if this can be replaced by s_b_comment:
-
-  # [x078]
-  # l-comment ::=
-  #   s-separate-in-line c-nb-comment-text?
-  #   b-comment
-
-  l_comment: ->
-    @all(
-      @rgx(re_separation_lines)
-      @rgx(///
-        #{comment_content}*
-        #{line_ending}
-      ///yu)
-    )
-
-
-
   # Call the variable initialization functions in the order needed for
   # JavaScript to be correct.
   init() for init in [
@@ -3247,6 +3275,7 @@ global.Grammar = class Grammar
     i128
     i127
     i119
+    i118b
     i051
     i096
     i095
@@ -3256,7 +3285,6 @@ global.Grammar = class Grammar
     i093
     i084
     i083
-    i081
-    i080
     i004
+#     i002
   ]
