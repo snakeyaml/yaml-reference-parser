@@ -15,7 +15,6 @@ global.Grammar = class Grammar
 
   start_of_line = '^'
   end_of_file = '$'
-  init = []
 
 
   # Grammar rules:
@@ -43,12 +42,12 @@ global.Grammar = class Grammar
     @all(
       @document_prefix
       @rep(0, 1, @any_document)
-      @rep2(0, null,
+      @rep(0, null,
         @any(
           @all(
             @document_suffix
             @rep(0, null, @document_prefix)
-            @rep2(0, 1, @any_document)
+            @rep(0, 1, @any_document)
           )
           @all(
             @document_prefix
@@ -67,8 +66,8 @@ global.Grammar = class Grammar
 
   document_prefix: ->
     @all(
-      @rep(0, 1, @chr(c_byte_order_mark))
-      @rep2(0, null, @l_comment)
+      @rep(0, 1, @chr(byte_order_mark))
+      @rep(0, null, @l_comment)
     )
 
 
@@ -81,7 +80,7 @@ global.Grammar = class Grammar
   document_suffix: ->
     @all(
       @document_end_indicator
-      @s_l_comments
+      @comment_lines
     )
 
 
@@ -91,7 +90,8 @@ global.Grammar = class Grammar
   #   "---"
 
   [document_start_indicator, re_document_start_indicator] = []
-  init.push ->
+
+  i004 = ->
     [document_start_indicator, re_document_start_indicator] = r ///
       ---
       #{ws_lookahead}
@@ -160,8 +160,8 @@ global.Grammar = class Grammar
       @any(
         @bare_document
         @all(
-          @e_node
-          @s_l_comments
+          @empty_node
+          @comment_lines
         )
       )
     )
@@ -195,11 +195,11 @@ global.Grammar = class Grammar
     @all(
       @chr('%')
       @any(
-        @ns_yaml_directive
-        @ns_tag_directive
-        @rgx(re_ns_reserved_directive)
+        @yaml_directive_line
+        @tag_directive_line
+        @reserved_directive_line
       )
-      @s_l_comments
+      @comment_lines
     )
 
 
@@ -225,9 +225,12 @@ global.Grammar = class Grammar
             #{document_start_indicator}
           | #{document_end_indicator}
           )
-          (?:
-            #{b_char}
-          | #{s_white}
+          (?:   # XXX slightly different than 1.3 spec
+            [
+              \x0A
+              \x0D
+            ]
+          | #{blank_character}
           | #{end_of_file}
           )
         )
@@ -270,9 +273,9 @@ global.Grammar = class Grammar
 
   flow_node_in_a_block_node: (n)->
     @all(
-      [ @s_separate, n + 1, "flow-out" ]
-      [ @ns_flow_node, n + 1, "flow-out" ]
-      @s_l_comments
+      [ @separation_characters, n + 1, "flow-out" ]
+      [ @flow_node, n + 1, "flow-out" ]
+      @comment_lines
     )
 
 
@@ -293,27 +296,27 @@ global.Grammar = class Grammar
     @all(
       @rep(0, 1,
         @all(
-          [ @s_separate, n + 1, c ]
-          # XXX replace with `node-properties`
+          [ @separation_characters, n + 1, c ]
           @any(
             @all(
-              [ @c_ns_properties, n + 1, c ]
-              @s_l_comments
+              [ @node_properties, n + 1, c ]
+              @comment_lines
+            )
+
+            # XXX Needed by receiver to get only a tag or anchor:
+            @all(
+              @tag_property
+              @comment_lines
             )
             @all(
-              @c_ns_tag_property
-              @s_l_comments
-            )
-            @all(
-              @c_ns_anchor_property
-              @s_l_comments
+              @anchor_property
+              @comment_lines
             )
           )
         )
       )
-      @s_l_comments
+      @comment_lines
       @any(
-        # [ @block_sequence_context, [ @seq_spaces, n, c ] ]
         [ @block_sequence_context, n, c ]
         [ @block_mapping, n ]
       )
@@ -346,16 +349,16 @@ global.Grammar = class Grammar
 
   block_scalar: (n, c)->
     @all(
-      [ @s_separate, n + 1, c ]
+      [ @separation_characters, n + 1, c ]
       @rep(0, 1,
         @all(
-          [ @c_ns_properties, n + 1, c ]
-          [ @s_separate, n + 1, c ]
+          [ @node_properties, n + 1, c ]
+          [ @separation_characters, n + 1, c ]
         )
       )
       @any(
-        [ @c_l_literal, n ]
-        [ @c_l_folded, n ]
+        [ @block_literal_scalar, n ]
+        [ @block_folded_scalar, n ]
       )
     )
 
@@ -373,7 +376,7 @@ global.Grammar = class Grammar
     @all(
       @rep(1, null,
         @all(
-          @rgx(s_indent_n(n + m))
+          @indentation_spaces_n(n + m)
           [ @block_mapping_entry, n + m ]
         )
       )
@@ -407,7 +410,7 @@ global.Grammar = class Grammar
       [ @block_mapping_explicit_key, n ]
       @any(
         [ @block_mapping_explicit_value, n ]
-        @e_node
+        @empty_node
       )
     )
 
@@ -437,7 +440,7 @@ global.Grammar = class Grammar
 
   block_mapping_explicit_value: (n)->
     @all(
-      @rgx(s_indent_n(n))
+      @indentation_spaces_n(n)
       @rgx(///
         :
         #{ws_lookahead}
@@ -459,7 +462,7 @@ global.Grammar = class Grammar
     @all(
       @any(
         @block_mapping_implicit_key
-        @e_node
+        @empty_node
       )
       [ @block_mapping_implicit_value, n ]
     )
@@ -474,8 +477,8 @@ global.Grammar = class Grammar
 
   block_mapping_implicit_key: ->
     @any(
-      [ @c_s_implicit_json_key, "block-key" ],
-      [ @ns_s_implicit_yaml_key, "block-key" ]
+      [ @implicit_json_key, "block-key" ],
+      [ @implicit_yaml_key, "block-key" ]
     )
 
 
@@ -500,8 +503,8 @@ global.Grammar = class Grammar
       @any(
         [ @block_node, n, "block-out" ]
         @all(
-          @e_node
-          @s_l_comments
+          @empty_node
+          @comment_lines
         )
       )
     )
@@ -521,7 +524,7 @@ global.Grammar = class Grammar
       [ @block_mapping_entry, n ]
       @rep(0, null,
         @all(
-          @rgx(s_indent_n(n))
+          @indentation_spaces_n(n)
           [ @block_mapping_entry, n ]
         )
       )
@@ -541,8 +544,8 @@ global.Grammar = class Grammar
     @all(
       @rep(1, null,
         @all(
-          @rgx(s_indent_n(n + m))
-          [ @c_l_block_seq_entry, n + m ]
+          @indentation_spaces_n(n + m)
+          [ @block_sequence_entry, n + m ]
         )
       )
     )
@@ -555,13 +558,13 @@ global.Grammar = class Grammar
   #   [ lookahead ≠ non-space-character ]
   #   block-indented-node(n,BLOCK-IN)
 
-  c_l_block_seq_entry: (n)->
+  block_sequence_entry: (n)->
     @all(
       @rgx(///
         -
         #{ws_lookahead}
-      ///y)
-      @chk('!', @rgx(re_ns_char))
+        (?! #{non_space_character} )
+      ///yu)
       [ @block_indented_node, n, "block-in" ]
     )
 
@@ -586,7 +589,7 @@ global.Grammar = class Grammar
     m = @call [@auto_detect_indent, n], 'number'
     @any(
       @all(
-        @rgx(s_indent_n(m))
+        @indentation_spaces_n(m)
         @any(
           [ @compact_sequence, n + 1 + m ]
           [ @compact_mapping, n + 1 + m ]
@@ -594,8 +597,8 @@ global.Grammar = class Grammar
       )
       [ @block_node, n, c ]
       @all(
-        @e_node
-        @s_l_comments
+        @empty_node
+        @comment_lines
       )
     )
 
@@ -611,821 +614,1208 @@ global.Grammar = class Grammar
 
   compact_sequence: (n)->
     @all(
-      [ @c_l_block_seq_entry, n ]
+      [ @block_sequence_entry, n ]
       @rep(0, null,
         @all(
-          @rgx(s_indent_n(n))
-          [ @c_l_block_seq_entry, n ]
+          @indentation_spaces_n(n)
+          [ @block_sequence_entry, n ]
         )
       )
     )
-
-
-
-
-#------------------------------------------------------------------------------
-  # [001]
-  # c-printable ::=
-  #   x:9 | x:A | x:D | [x:20-x:7E]
-  #   | x:85 | [x:A0-x:D7FF] | [x:E000-x:FFFD]
-  #   | [x:10000-x:10FFFF]
-
-  [c_printable] = r ///
-    [
-      \x09
-      \x0A
-      \x0D
-      \x20-\x7E
-      \x85
-      \xA0-\uD7FF
-      \uE000-\uFFFD
-      \u{10000}-\u{10FFFF}
-    ]
-  ///u
-
-
-
-  # [002]
-  # nb-json ::=
-  #   x:9 | [x:20-x:10FFFF]
-
-  [nb_json] = r ///
-    [
-      \x09
-      \x20-\u{10FFFF}
-    ]
-  ///u
-
-
-
-  # [003]
-  # c-byte-order-mark ::=
-  #   x:FEFF
-
-  c_byte_order_mark = "\u{FEFF}"
-
-
-
-  # [022]               # XXX rule not in 1.3
-  # c-indicator ::=
-  #   '-' | '?' | ':' | ',' | '[' | ']' | '{' | '}'
-  #   | '#' | '&' | '*' | '!' | '|' | '>' | ''' | '"'
-  #   | '%' | '@' | '`'
-
-  [c_indicator] = r ///
-    [
-       -
-       ?
-       :
-       ,
-       [
-       \]
-       {
-       }
-       \x23     # '#'
-       &
-       *
-       !
-       |
-       >
-       '
-       "
-       %
-       @
-       `
-    ]
-  ///
-
-
-
-  # [023]
-  # c-flow-indicator ::=
-  #   ',' | '[' | ']' | '{' | '}'
-
-  [c_flow_indicator, , c_flow_indicator_s] = r ///
-    [
-      ,
-      [
-      \]
-      {
-      }
-    ]
-  ///
-
-
-
-  # [026]
-  # b-char ::=
-  #   b-line-feed | b-carriage-return
-
-  [b_char, re_b_char, b_char_s] = r ///
-    [
-      \x0A
-      \x0D
-    ]
-  ///
-
-
-
-  # [027]
-  # nb-char ::=
-  #   c-printable - b-char - c-byte-order-mark
-
-  [nb_char, re_nb_char] = r ///
-    (?:
-      (?!
-        [
-          #{b_char_s}
-          #{c_byte_order_mark}
-        ]
-      )
-      #{c_printable}
-    )
-  ///u
-
-
-
-  # [028]
-  # b-break ::=
-  #   ( b-carriage-return b-line-feed )
-  #   | b-carriage-return
-  #   | b-line-feed
-
-  [b_break, re_b_break] = r ///
-    (?:
-      (?:
-        \x0D
-        \x0A
-      )
-    | \x0D
-    | \x0A
-    )
-  ///
-
-
-
-  # [029]
-  # b-as-line-feed ::=
-  #   b-break
-
-  re_b_as_line_feed = re_b_break
-
-
-
-  # [030]
-  # b-non-content ::=
-  #   b-break
-
-  b_non_content = b_break
-  re_b_non_content = re_b_break
 
 
 
   # [031]
-  # s-space ::=
-  #   x:20
+  # block-literal-scalar(n) ::=
+  #   '|'
+  #   block-scalar-indicators(t)
+  #   literal-scalar-content(n+m,t)
 
-  s_space = "\x20"
+  block_literal_scalar: (n)->
+    @all(
+      @chr('|')
+      [ @block_scalar_indicator, n ]
+      [ @literal_scalar_content, @add(n, @m()), @t() ]
+    )
+
+
+
+  # [032]
+  # literal-scalar-content(n,t) ::=
+  #   (
+  #     literal-scalar-line-content(n)
+  #     literal-scalar-next-line(n)*
+  #     block-scalar-chomp-last(t)
+  #   )?
+  #   block-scalar-chomp-empty(n,t)
+
+  literal_scalar_content: (n, t)->
+    @all(
+      @rep(0, 1,
+        @all(
+          [ @literal_scalar_line_content, n ]
+          @rep(0, null, [ @literal_scalar_next_line, n ])
+          [ @block_scalar_chomp_last, t ]
+        )
+      )
+      [ @block_scalar_chomp_empty, n, t ]
+    )
 
 
 
   # [033]
-  # s-white ::=
-  #   s-space | s-tab
+  # literal-scalar-line-content(n) ::=
+  #   empty-line(n,BLOCK-IN)*
+  #   indentation-spaces(n)
+  #   non-break-character+
 
-  [s_white] = r ///
-    [
-      #{s_space}
-      \t
-    ]
-  ///
-
-
-
-  [ws_lookahead] = r ///
-    (?=
-      #{end_of_file}
-    | #{s_white}
-    | #{b_break}
+  literal_scalar_line_content: (n)->
+    @all(
+      @rep(0, null, [ @empty_line, n, "block-in" ])
+      @indentation_spaces_n(n)
+      # XXX @all used to disambiguate @rgx capture:
+      @all(
+        @rgx(/// #{non_break_character}+ ///yu)
+      )
     )
-  ///
 
 
 
   # [034]
-  # ns-char ::=
-  #   nb-char - s-white
+  # literal-scalar-next-line(n) ::=
+  #   break-as-line-feed
+  #   literal-scalar-line-content(n)
 
-  [ns_char, re_ns_char] = r ///
-    (?:
-      (?!
-        #{s_white}
-      )
-      #{nb_char}
+  literal_scalar_next_line: (n)->
+    @all(
+      @rgx(re_break_as_line_feed)
+      [ @literal_scalar_line_content, n ]
     )
-  ///u
 
 
 
   # [035]
-  # ns-dec-digit ::=
-  #   [x:30-x:39]
+  # block-folded-scalar(n) ::=
+  #   '>'
+  #   block-scalar-indicators(t)
+  #   folded-scalar-content(n+m,t)
 
-  [ns_dec_digit, , ns_dec_digit_s] = r ///
-    [
-      0 - 9
-    ]
-  ///
+  block_folded_scalar: (n)->
+    @all(
+      @chr('>')
+      [ @block_scalar_indicator, n ]
+      [ @folded_scalar_content, @add(n, @m()), @t() ]
+    )
 
 
 
   # [036]
-  # ns-hex-digit ::=
-  #   ns-dec-digit
-  #   | [x:41-x:46] | [x:61-x:66]
+  # folded-scalar-content(n,t) ::=
+  #   (
+  #     folded-scalar-lines-different-indentation(n)
+  #     block-scalar-chomp-last(t)
+  #   )?
+  #   block-scalar-chomp-empty(n,t)
 
-  [ns_hex_digit] = r ///
-    [
-      #{ns_dec_digit_s}
-      A - F
-      a - f
-    ]
-  ///
+  folded_scalar_content: (n, t)->
+    @all(
+      @rep(0, 1,
+        @all(
+          [ @folded_scalar_lines_different_indentation, n ]
+          [ @block_scalar_chomp_last, t ]
+        )
+      )
+      [ @block_scalar_chomp_empty, n, t ]
+    )
 
 
 
   # [037]
-  # ns-ascii-letter ::=
-  #   [x:41-x:5A] | [x:61-x:7A]
+  # folded-scalar-lines-different-indentation(n) ::=
+  #   folded-scalar-lines-same-indentation(n)
+  #   (
+  #     break-as-line-feed
+  #     folded-scalar-lines-same-indentation(n)
+  #   )*
 
-  [, , ns_ascii_letter_s] = r ///
-    [
-      A - Z
-      a - z
-    ]
-  ///
+  folded_scalar_lines_different_indentation: (n)->
+    @all(
+      [ @folded_scalar_lines_same_indentation, n ]
+      @rep(0, null,
+        @all(
+          @rgx(re_break_as_line_feed)
+          [ @folded_scalar_lines_same_indentation, n ]
+        )
+      )
+    )
 
 
 
   # [038]
-  # ns-word-char ::=
-  #   ns-dec-digit | ns-ascii-letter | '-'
+  # folded-scalar-lines-same-indentation(n) ::=
+  #   empty-line(n,BLOCK-IN)*
+  #   (
+  #       folded-scalar-lines(n)
+  #     | folded-scalar-spaced-lines(n)
+  #   )
 
-  [ns_word_char, , ns_word_char_s] = r ///
-    [
-      #{ns_dec_digit_s}
-      #{ns_ascii_letter_s}
-      \-
-    ]
-  ///
+  folded_scalar_lines_same_indentation: (n)->
+    @all(
+      @rep(0, null, [ @empty_line, n, "block-in" ])
+      @any(
+        [ @folded_scalar_lines, n ]
+        [ @folded_scalar_spaced_lines, n ]
+      )
+    )
 
 
 
   # [039]
-  # ns-uri-char ::=
-  #   '%' ns-hex-digit ns-hex-digit | ns-word-char | '#'
-  #   | ';' | '/' | '?' | ':' | '@' | '&' | '=' | '+' | '$' | ','
-  #   | '_' | '.' | '!' | '~' | '*' | ''' | '(' | ')' | '[' | ']'
+  # folded-scalar-lines(n) ::=
+  #   folded-scalar-text(n)
+  #   (
+  #     folded-whitespace(n,BLOCK-IN)
+  #     folded-scalar-text(n)
+  #   )*
 
-  [ns_uri_char] = r ///
-    (?:
-      % #{ns_hex_digit}{2}
-    | [
-        #{ns_word_char_s}
-        \x23
-        ;
-        /
-        ?
-        :
-        @
-        &
-        =
-        +
-        $
-        ,
-        _
-        .
-        !
-        ~
-        *
-        '
-        (
+  folded_scalar_lines: (n)->
+    @all(
+      [ @folded_scalar_text, n ]
+      @rep(0, null,
+        @all(
+          [ @folded_whitespace, n, "block-in" ]
+          [ @folded_scalar_text, n ]
         )
-        [
-        \]
-      ]
+      )
     )
-  ///
 
 
 
   # [040]
-  # ns-tag-char ::=
-  #   ns-uri-char - '!' - c-flow-indicator
+  # folded-scalar-spaced-lines(n) ::=
+  #   folded-scalar-spaced-text(n)
+  #   (
+  #     line-break-and-empty-lines(n)
+  #     folded-scalar-spaced-text(n)
+  #   )*
 
-  [ns_tag_char] = r ///
-    (?:
-      (?!
-        [
-          !
-          #{c_flow_indicator_s}
-        ]
-      )
-      #{ns_uri_char}
-    )
-  ///
-
-
-
-  # [062]
-  # c-ns-esc-char ::=
-  #   '\'
-  #   ( ns-esc-null | ns-esc-bell | ns-esc-backspace
-  #   | ns-esc-horizontal-tab | ns-esc-line-feed
-  #   | ns-esc-vertical-tab | ns-esc-form-feed
-  #   | ns-esc-carriage-return | ns-esc-escape | ns-esc-space
-  #   | ns-esc-double-quote | ns-esc-slash | ns-esc-backslash
-  #   | ns-esc-next-line | ns-esc-non-breaking-space
-  #   | ns-esc-line-separator | ns-esc-paragraph-separator
-  #   | ns-esc-8-bit | ns-esc-16-bit | ns-esc-32-bit )
-
-  [c_ns_esc_char] = r ///
-    \\
-    (?:
-      [
-        0
-        a
-        b
-        t
-        \t
-        n
-        v
-        f
-        r
-        e
-        \x20
-        "
-        /
-        \\
-        N
-        _
-        L
-        P
-      ]
-    | x #{ns_hex_digit}{2}
-    | u #{ns_hex_digit}{4}
-    | U #{ns_hex_digit}{8}
-    )
-  ///
-
-
-
-  # [063]
-  [, re_s_indent] = r ///
-    #{s_space}*
-  ///
-
-  s_indent_n = (n)->
-    /// #{s_space}{#{n}} ///y
-
-
-
-  # [064]
-  # s-indent(<n) ::=
-  #   s-space{m} <where_m_<_n>
-
-  s_indent_lt: (n)->
+  folded_scalar_spaced_lines: (n)->
     @all(
-      @rgx(re_s_indent)
-      @lt(@len(@match), n)
-    )
-
-
-
-  # [065]
-  # s-indent(<=n) ::=
-  #   s-space{m} <where_m_<=_n>
-
-  s_indent_le: (n)->
-    @all(
-      @rgx(re_s_indent)
-      @le(@len(@match), n)
-    )
-
-
-
-  # [066]
-  # s-separate-in-line ::=
-  #   s-white+ | <start_of_line>
-
-  [s_separate_in_line, re_s_separate_in_line] = r ///
-    (?:
-      #{s_white}+
-    | #{start_of_line}
-    )
-  ///
-
-
-
-  # [067]
-  # s-line-prefix(n,c) ::=
-  #   ( c = block-out => s-block-line-prefix(n) )
-  #   ( c = block-in => s-block-line-prefix(n) )
-  #   ( c = flow-out => s-flow-line-prefix(n) )
-  #   ( c = flow-in => s-flow-line-prefix(n) )
-
-  s_line_prefix: (n, c)->
-    @case c,
-      'block-in': [ @s_block_line_prefix, n ]
-      'block-out': [ @s_block_line_prefix, n ]
-      'flow-in': [ @s_flow_line_prefix, n ]
-      'flow-out': [ @s_flow_line_prefix, n ]
-
-
-
-  # XXX Can be removed
-  # [068]
-  # s-block-line-prefix(n) ::=
-  #   s-indent(n)
-
-  s_block_line_prefix: (n)->
-    @rgx(s_indent_n(n))
-
-
-
-  # [069]
-  # s-flow-line-prefix(n) ::=
-  #   s-indent(n)
-  #   s-separate-in-line?
-
-  s_flow_line_prefix: (n)->
-    @all(
-      @rgx(s_indent_n(n))
-      @rep(0, 1, @rgx(re_s_separate_in_line))
-    )
-
-
-
-  # [070]
-  # l-empty(n,c) ::=
-  #   ( s-line-prefix(n,c) | s-indent(<n) )
-  #   b-as-line-feed
-
-  l_empty: (n, c)->
-    @all(
-      @any(
-        [ @s_line_prefix, n, c ]
-        [ @s_indent_lt, n ]
-      )
-      @rgx(re_b_as_line_feed)
-    )
-
-
-
-  # [072]
-  # b-as-space ::=
-  #   b-break
-
-  re_b_as_space = re_b_break
-
-
-
-  # [073]
-  # b-l-folded(n,c) ::=
-  #   b-l-trimmed(n,c) | b-as-space
-
-  b_l_folded: (n, c)->
-    @any(
-      @all(
-        @rgx(re_b_non_content)
-        @rep(1, null, [ @l_empty, n, c ])
-      )
-      @rgx(re_b_as_space)
-    )
-
-
-
-  # [074]
-  # s-flow-folded(n) ::=
-  #   s-separate-in-line?
-  #   b-l-folded(n,flow-in)
-  #   s-flow-line-prefix(n)
-
-  s_flow_folded: (n)->
-    @all(
-      @rep(0, 1, @rgx(re_s_separate_in_line))
-      [ @b_l_folded, n, "flow-in" ]
-      [ @s_flow_line_prefix, n ]
-    )
-
-
-
-  # [075]
-  # c-nb-comment-text ::=
-  #   '#' nb-char*
-
-  [c_nb_comment_text] = r ///
-    (?:
-      \x23
-      #{nb_char}*
-    )
-  ///u
-
-
-
-  # [076]
-  # b-comment ::=
-  #   b-non-content | <end_of_file>
-
-  [b_comment, re_b_comment] = r ///
-    (?:
-      #{b_non_content}
-    | #{end_of_file}
-    )
-  ///
-
-
-
-  # [077]
-  # s-b-comment ::=
-  #   ( s-separate-in-line
-  #   c-nb-comment-text? )?
-  #   b-comment
-
-  s_b_comment: ->
-    @all(
-      @rep(0, 1,
+      [ @folded_scalar_spaced_text, n ]
+      @rep(0, null,
         @all(
-          @rgx(re_s_separate_in_line)
-          @rgx(/// #{c_nb_comment_text}? ///yu, true)
+          [ @line_break_and_empty_lines, n ]
+          [ @folded_scalar_spaced_text, n ]
         )
       )
-      @rgx(re_b_comment, true)
     )
 
 
 
-  # [078]
-  # l-comment ::=
-  #   s-separate-in-line c-nb-comment-text?
-  #   b-comment
+  # [041]
+  # folded-scalar-text(n) ::=
+  #   indentation-spaces(n)
+  #   non-space-character
+  #   non-break-character*
 
-  l_comment: ->
+  folded_scalar_text: (n)->
     @all(
-      @rgx(re_s_separate_in_line)
-      @rgx(///
-        #{c_nb_comment_text}*
-        #{b_comment}
-      ///yu)
+      @indentation_spaces_n(n)
+      # XXX @all used to disambiguate @rgx capture:
+      @all(
+        @rgx(///
+          #{non_space_character}+
+          #{non_break_character}*
+        ///yu)
+      )
     )
 
 
 
-  # [079]
-  # s-l-comments ::=
-  #   ( s-b-comment | <start_of_line> )
-  #   l-comment*
+  # [042]
+  # line-break-and-empty-lines(n) ::=
+  #   break-as-line-feed
+  #   empty-line(n,BLOCK-IN)*
 
-  s_l_comments: ->
+  line_break_and_empty_lines: (n)->
+    @all(
+      @rgx(re_break_as_line_feed)
+      @rep(0, null, [ @empty_line, n, "block-in" ])
+    )
+
+
+
+  # [043]
+  # folded-scalar-spaced-text(n) ::=
+  #   indentation-spaces(n)
+  #   blank-character
+  #   non-break-character*
+
+  folded_scalar_spaced_text: (n)->
+    @all(
+      @indentation_spaces_n(n)
+      @all(
+        @rgx(///
+          #{blank_character}
+          #{non_break_character}*
+        ///yu)
+      )
+    )
+
+
+
+  # [044]
+  # block-scalar-indicators(t) ::=
+  #   (
+  #       (
+  #         block-scalar-indentation-indicator
+  #         block-scalar-chomping-indicator(t)
+  #       )
+  #     | (
+  #         block-scalar-chomping-indicator(t)
+  #         block-scalar-indentation-indicator
+  #       )
+  #   )
+  #   (
+  #       comment-line
+  #     | line-ending
+  #   )
+
+  block_scalar_indicator: (n)->
     @all(
       @any(
-        @s_b_comment
-        @start_of_line
+        @all(
+          [ @block_scalar_indentation_indicator, n ]
+          @block_scalar_chomping_indicator
+          @rgx(ws_lookahead)
+        )
+        @all(
+          @block_scalar_chomping_indicator
+          [ @block_scalar_indentation_indicator, n ]
+          @rgx(ws_lookahead)
+        )
       )
+      @comment_line
+    )
+
+
+
+  # [045]
+  # block-scalar-indentation-indicator ::=
+  #   decimal-digit-1-9
+
+  block_scalar_indentation_indicator: (n)->
+    @any(
+      @if(@rgx(re_decimal_digit_1_9), @set('m', @ord(@match)))
+      @if(@empty, @set('m', [ @auto_detect, n ]))
+    )
+
+
+
+  # [046]
+  # block-scalar-chomping-indicator(STRIP) ::= '-'
+  # block-scalar-chomping-indicator(KEEP)  ::= '+'
+  # block-scalar-chomping-indicator(CLIP)  ::= ""
+
+  block_scalar_chomping_indicator: ->
+    @any(
+      @if(@chr('-'), @set('t', "strip"))
+      @if(@chr('+'), @set('t', "keep"))
+      @if(@empty, @set('t', "clip"))
+    )
+
+
+
+  # [047]
+  # block-scalar-chomp-last(STRIP) ::= line-break | <end-of-input>
+  # block-scalar-chomp-last(CLIP)  ::= break-as-line-feed | <end-of-input>
+  # block-scalar-chomp-last(KEEP)  ::= break-as-line-feed | <end-of-input>
+
+  block_scalar_chomp_last: (t)->
+    @case t,
+      'clip': @any( @rgx(re_break_as_line_feed), @end_of_stream )
+      'keep': @any( @rgx(re_break_as_line_feed), @end_of_stream )
+      'strip': @any( @rgx(re_line_break), @end_of_stream )
+
+
+
+  #   [048]
+  #   block-scalar-chomp-empty(n,STRIP) ::= line-strip-empty(n)
+  #   block-scalar-chomp-empty(n,CLIP)  ::= line-strip-empty(n)
+  #   block-scalar-chomp-empty(n,KEEP)  ::= line-keep-empty(n)
+
+  block_scalar_chomp_empty: (n, t)->
+    @case t,
+      'strip': [ @line_strip_empty, n ]
+      'clip': [ @line_strip_empty, n ]
+      'keep': [ @line_keep_empty, n ]
+
+
+
+  # [049]
+  # line-strip-empty(n) ::=
+  #   (
+  #     indentation-spaces-less-or-equal(n)
+  #     line-break
+  #   )*
+  #   line-trail-comments(n)?
+
+  line_strip_empty: (n)->
+    @all(
+      @rep(0, null,
+        @all(
+          [ @indentation_spaces_less_or_equal, n ]
+          @rgx(re_line_break)
+        )
+      )
+      @rep(0, 1, [ @line_trail_comments, n ])
+    )
+
+
+
+  # [050]
+  # line-keep-empty(n) ::=
+  #   empty-line(n,BLOCK-IN)*
+  #   line-trail-comments(n)?
+
+  line_keep_empty: (n)->
+    @all(
+      @rep(0, null, [ @empty_line, n, "block-in" ])
+      @rep(0, 1, [ @line_trail_comments, n ])
+    )
+
+
+
+  # [051]
+  # line-trail-comments(n) ::=
+  #   indentation-spaces-less-than(n)
+  #   comment-content
+  #   line-ending
+  #   comment-line*
+
+  re_line_trail_comments = ''
+
+  i051 = ->
+    [, re_line_trail_comments] = r ///
+      #{comment_content}
+      #{line_ending}
+    ///u
+
+  line_trail_comments: (n)->
+    @all(
+      [ @indentation_spaces_less_than, n ]
+      @rgx(re_line_trail_comments)
       @rep(0, null, @l_comment)
     )
 
 
 
-  # [080]
-  # s-separate(n,c) ::=
-  #   ( c = block-out => s-separate-lines(n) )
-  #   ( c = block-in => s-separate-lines(n) )
-  #   ( c = flow-out => s-separate-lines(n) )
-  #   ( c = flow-in => s-separate-lines(n) )
-  #   ( c = block-key => s-separate-in-line )
-  #   ( c = flow-key => s-separate-in-line )
+  # [052]
+  # flow-node(n,c) ::=
+  #     alias-node
+  #   | flow-content(n,c)
+  #   | (
+  #       node-properties(n,c)
+  #       (
+  #         (
+  #           separation-characters(n,c)
+  #           flow-content(n,c)
+  #         )
+  #         | empty-node
+  #       )
+  #     )
 
-  s_separate: (n, c)->
-    @case c,
-      'block-in': [ @s_separate_lines, n ]
-      'block-key': @rgx(re_s_separate_in_line)
-      'block-out': [ @s_separate_lines, n ]
-      'flow-in': [ @s_separate_lines, n ]
-      'flow-key': @rgx(re_s_separate_in_line)
-      'flow-out': [ @s_separate_lines, n ]
+  flow_node: (n, c)->
+    @any(
+      @alias_node
+      [ @flow_content, n, c ]
+      @all(
+        [ @node_properties, n, c ]
+        @any(
+          @all(
+            [ @separation_characters, n, c ]
+            [ @flow_content, n, c ]
+          )
+          @empty_node
+        )
+      )
+    )
 
 
 
-  # [081]
-  # s-separate-lines(n) ::=
-  #   ( s-l-comments
-  #   s-flow-line-prefix(n) )
-  #   | s-separate-in-line
+  # [053]
+  # flow-content(n,c) ::=
+  #     flow-yaml-content(n,c)
+  #   | flow-json-content(n,c)
 
-  s_separate_lines: (n)->
+  flow_content: (n, c)->
+    @any(
+      [ @flow_yaml_content, n, c ]
+      [ @flow_json_content, n, c ]
+    )
+
+
+
+  # [054]
+  # flow-yaml-content(n,c) ::=
+  #   flow-plain-scalar(n,c)
+
+  flow_yaml_content: (n, c)->
+    [ @flow_plain_scalar, n, c ]
+
+
+
+  # [055]
+  # flow-json-content(n,c) ::=
+  #     flow-sequence(n,c)
+  #   | flow-mapping(n,c)
+  #   | single-quoted-scalar(n,c)
+  #   | double-quoted-scalar(n,c)
+
+  flow_json_content: (n, c)->
+    @any(
+      [ @flow_sequence, n, c ]
+      [ @flow_mapping, n, c ]
+      [ @single_quoted_scalar, n, c ]
+      [ @double_quoted_scalar, n, c ]
+    )
+
+
+
+  # [056]
+  # flow-mapping(n,c) ::=
+  #   '{'
+  #   separation-characters(n,c)?
+  #   flow-mapping-context(n,c)?
+  #   '}'
+
+  flow_mapping: (n, c)->
+    @all(
+      @chr('{')
+      @rep(0, 1, [ @separation_characters, n, c ])
+      @rep(0, 1, [ @flow_mapping_context, n, c ])
+      @chr('}')
+    )
+
+
+
+  # [057]
+  # flow-mapping-entries(n,c) ::=
+  #   flow-mapping-entry(n,c)
+  #   separation-characters(n,c)?
+  #   (
+  #     ','
+  #     separation-characters(n,c)?
+  #     flow-mapping-entries(n,c)?
+  #   )?
+
+  flow_mapping_entries: (n, c)->
+    @all(
+      [ @flow_mapping_entry, n, c ]
+      @rep(0, 1, [ @separation_characters, n, c ])
+      @rep(0, 1,
+        @all(
+          @chr(',')
+          @rep(0, 1, [ @separation_characters, n, c ])
+          @rep(0, 1, [ @flow_mapping_entries, n, c ])
+        )
+      )
+    )
+
+
+
+  # [058]
+  # flow-mapping-entry(n,c) ::=
+  #     (
+  #       '?'                           # Not followed by non-ws char
+  #       separation-characters(n,c)
+  #       flow-mapping-explicit-entry(n,c)
+  #     )
+  #   | flow-mapping-implicit-entry(n,c)
+
+  flow_mapping_entry: (n, c)->
     @any(
       @all(
-        @s_l_comments
-        [ @s_flow_line_prefix, n ]
+        @rgx(///
+          \?
+          #{ws_lookahead}
+        ///y)
+        [ @separation_characters, n, c ]
+        [ @flow_mapping_explicit_entry, n, c ]
       )
-      @rgx(re_s_separate_in_line)
+      [ @flow_mapping_implicit_entry, n, c ]
     )
 
 
 
-  # [084]
-  # ns-directive-name ::=
-  #   ns-char+
+  # [59]
+  # flow-mapping-explicit-entry(n,c) ::=
+  #     flow-mapping-implicit-entry(n,c)
+  #   | (
+  #       empty-node
+  #       empty-node
+  #     )
 
-  [ns_directive_name] = r ///
-    #{ns_char}+
-  ///u
-
-
-
-  # [085]
-  # ns-directive-parameter ::=
-  #   ns-char+
-
-  [ns_directive_parameter] = r ///
-    #{ns_char}+
-  ///u
-
-
-
-  # [083]
-  # ns-reserved-directive ::=
-  #   ns-directive-name
-  #   ( s-separate-in-line ns-directive-parameter )*
-
-  [, re_ns_reserved_directive] = r ///
-    #{ns_directive_name}
-    (?:
-      #{s_separate_in_line}
-      #{ns_directive_parameter}
-    )*
-  ///u
+  flow_mapping_explicit_entry: (n, c)->
+    @any(
+      [ @flow_mapping_implicit_entry, n, c ]
+      @all(
+        @empty_node
+        @empty_node
+      )
+    )
 
 
 
-  # [086]
-  # ns-yaml-directive ::=
-  #   'Y' 'A' 'M' 'L'
-  #   s-separate-in-line ns-yaml-version
+  # [60]
+  # flow-mapping-implicit-entry(n,c) ::=
+  #     flow-mapping-yaml-key-entry(n,c)
+  #   | flow-mapping-empty-key-entry(n,c)
+  #   | flow-mapping-json-key-entry(n,c)
 
-  ns_yaml_directive: ->
+  flow_mapping_implicit_entry: (n, c)->
+    @any(
+      [ @flow_mapping_yaml_key_entry, n, c ]
+      [ @flow_mapping_empty_key_entry, n, c ]
+      [ @flow_mapping_json_key_entry, n, c ]
+    )
+
+
+
+  # [61]
+  # flow-mapping-yaml-key-entry(n,c) ::=
+  #   flow-yaml-node(n,c)
+  #   (
+  #       (
+  #         separation-characters(n,c)?
+  #         flow-mapping-separate-value(n,c)
+  #       )
+  #     | empty-node
+  #   )
+
+  flow_mapping_yaml_key_entry: (n, c)->
+    @all(
+      [ @flow_yaml_node, n, c ]
+      @any(
+        @all(
+          @rep(0, 1, [ @separation_characters, n, c ])
+          [ @flow_mapping_separate_value, n, c ]
+        )
+        @empty_node
+      )
+    )
+
+
+
+  # [62]
+  # flow-mapping-empty-key-entry(n,c) ::=
+  #   empty-node
+  #   flow-mapping-separate-value(n,c)
+
+  flow_mapping_empty_key_entry: (n, c)->
+    @all(
+      @empty_node
+      [ @flow_mapping_separate_value, n, c ]
+    )
+
+
+
+  # [63]
+  # flow-mapping-separate-value(n,c) ::=
+  #   ':'
+  #   [ lookahead ≠ non-space-plain-scalar-character(c) ]
+  #   (
+  #       (
+  #         separation-characters(n,c)
+  #         flow-node(n,c)
+  #       )
+  #     | empty-node
+  #   )
+
+  flow_mapping_separate_value: (n, c)->
+    @all(
+      @chr(':')
+      @chk('!', [ @non_space_plain_scalar_character, c ])
+      @any(
+        @all(
+          [ @separation_characters, n, c ]
+          [ @flow_node, n, c ]
+        )
+        @empty_node
+      )
+    )
+
+
+
+  # [64]
+  # flow-mapping-json-key-entry(n,c) ::=
+  #   flow-json-node(n,c)
+  #   (
+  #       (
+  #         separation-characters(n,c)?
+  #         flow-mapping-adjacent-value(n,c)
+  #       )
+  #     | empty-node
+  #   )
+
+  flow_mapping_json_key_entry: (n, c)->
+    @all(
+      [ @flow_json_node, n, c ]
+      @any(
+        @all(
+          @rep(0, 1, [ @separation_characters, n, c ])
+          [ @flow_mapping_adjacent_value, n, c ]
+        )
+        @empty_node
+      )
+    )
+
+
+
+  # [65]
+  # flow-mapping-adjacent-value(n,c) ::=
+  #   ':'
+  #   (
+  #       (
+  #         separation-characters(n,c)?
+  #         flow-node(n,c)
+  #       )
+  #     | empty-node
+  #   )
+
+  flow_mapping_adjacent_value: (n, c)->
+    @all(
+      @chr(':')
+      @any(
+        @all(
+          @rep(0, 1, [ @separation_characters, n, c ])
+          [ @flow_node, n, c ]
+        )
+        @empty_node
+      )
+    )
+
+
+
+  # [66]
+  # flow-pair(n,c) ::=
+  #     (
+  #       '?'                           # Not followed by non-ws char
+  #       separation-characters(n,c)
+  #       flow-mapping-explicit-entry(n,c)
+  #     )
+  #   | flow-pair-entry(n,c)
+
+  flow_pair: (n, c)->
+    @any(
+      @all(
+        @rgx(///
+          \?
+          #{ws_lookahead}
+        ///)
+        [ @separation_characters, n, c ]
+        [ @flow_mapping_explicit_entry, n, c ]
+      )
+      [ @flow_pair_entry, n, c ]
+    )
+
+
+
+  # [67]
+  # flow-pair-entry(n,c) ::=
+  #     flow-pair-yaml-key-entry(n,c)
+  #   | flow-mapping-empty-key-entry(n,c)
+  #   | flow-pair-json-key-entry(n,c)
+
+  flow_pair_entry: (n, c)->
+    @any(
+      [ @flow_pair_yaml_key_entry, n, c ]
+      [ @flow_mapping_empty_key_entry, n, c ]
+      [ @flow_pair_json_key_entry, n, c ]
+    )
+
+
+
+  # [68]
+  # flow-pair-yaml-key-entry(n,c) ::=
+  #   implicit-yaml-key(FLOW-KEY)
+  #   flow-mapping-separate-value(n,c)
+
+  flow_pair_yaml_key_entry: (n, c)->
+    @all(
+      [ @implicit_yaml_key, "flow-key" ]
+      [ @flow_mapping_separate_value, n, c ]
+    )
+
+
+
+  # [69]
+  # flow-pair-json-key-entry(n,c) ::=
+  #   implicit-json-key(FLOW-KEY)
+  #   flow-mapping-adjacent-value(n,c)
+
+  flow_pair_json_key_entry: (n, c)->
+    @all(
+      [ @implicit_json_key, "flow-key" ]
+      [ @flow_mapping_adjacent_value, n, c ]
+    )
+
+
+
+  # [70]
+  # implicit-yaml-key(c) ::=
+  #   flow-yaml-node(0,c)
+  #   separation-blanks?
+  #   /* At most 1024 characters altogether */
+
+  implicit_yaml_key: (c)->
+    @all(
+      @max(1024)
+      [ @flow_yaml_node, null, c ]
+      @rep(0, 1, @rgx(re_separation_lines))
+    )
+
+
+
+  # [71]
+  # implicit-json-key(c) ::=
+  #   flow-json-node(0,c)
+  #   separation-blanks?
+  #   /* At most 1024 characters altogether */
+
+  implicit_json_key: (c)->
+    @all(
+      @max(1024)
+      [ @flow_json_node, null, c ]
+      @rep(0, 1, @rgx(re_separation_lines))
+    )
+
+
+
+  # [72]
+  # flow-yaml-node(n,c) ::=
+  #     alias-node
+  #   | flow-yaml-content(n,c)
+  #   | (
+  #       node-properties(n,c)
+  #       (
+  #           (
+  #             separation-characters(n,c)
+  #             flow-yaml-content(n,c)
+  #           )
+  #         | empty-node
+  #       )
+  #     )
+
+  flow_yaml_node: (n, c)->
+    @any(
+      @alias_node
+      [ @flow_yaml_content, n, c ]
+      @all(
+        [ @node_properties, n, c ]
+        @any(
+          @all(
+            [ @separation_characters, n, c ]
+            [ @flow_content, n, c ]
+          )
+          @empty_node
+        )
+      )
+    )
+
+
+
+  # [73]
+  # flow-json-node(n,c) ::=
+  #   (
+  #     node-properties(n,c)
+  #     separation-characters(n,c)
+  #   )?
+  #   flow-json-content(n,c)
+
+  flow_json_node: (n, c)->
+    @all(
+      @rep(0, 1,
+        @all(
+          [ @node_properties, n, c ]
+          [ @separation_characters, n, c ]
+        )
+      )
+      [ @flow_json_content, n, c ]
+    )
+
+
+
+  # [074]
+  # flow-sequence(n,c) ::=
+  #   '['
+  #   separation-characters(n,c)?
+  #   flow-sequence-context(n,c)?
+  #   ']'
+
+  flow_sequence: (n, c)->
+    @all(
+      @chr('[')
+      @rep(0, 1, [ @separation_characters, n, c ])
+      @rep(0, 1, [ @flow_sequence_context, n, c ])
+      @chr(']')
+    )
+
+
+
+  # [075]
+  # flow-sequence-entries(n,c) ::=
+  #   flow-sequence-entry(n,c)
+  #   separation-characters(n,c)?
+  #   (
+  #     ','
+  #     separation-characters(n,c)?
+  #     flow-sequence-entries(n,c)?
+  #   )?
+
+  flow_sequence_entries: (n, c)->
+    @all(
+      [ @flow_sequence_entry, n, c ]
+      @rep(0, 1, [ @separation_characters, n, c ])
+      @rep(0, 1,
+        @all(
+          @chr(',')
+          @rep(0, 1, [ @separation_characters, n, c ])
+          @rep(0, 1, [ @flow_sequence_entries, n, c ])
+        )
+      )
+    )
+
+
+
+  # [76]
+  # flow-sequence-entry(n,c) ::=
+  #     flow-pair(n,c)
+  #   | flow-node(n,c)
+
+  flow_sequence_entry: (n, c)->
+    @any(
+      [ @flow_pair, n, c ]
+      [ @flow_node, n, c ]
+    )
+
+
+
+  # [77]
+  # double-quoted-scalar(n,c) ::=
+  #   '"'
+  #   double-quoted-text(n,c)
+  #   '"'
+
+  double_quoted_scalar: (n, c)->
+    @all(
+      @chr('"')
+      [ @double_quoted_text, n, c ]
+      @chr('"')
+    )
+
+
+
+  # [78]
+  # double-quoted-text(n,BLOCK-KEY) ::= double-quoted-one-line
+  # double-quoted-text(n,FLOW-KEY)  ::= double-quoted-one-line
+  # double-quoted-text(n,FLOW-OUT)  ::= double-quoted-multi-line(n)
+  # double-quoted-text(n,FLOW-IN)   ::= double-quoted-multi-line(n)
+
+  double_quoted_text: (n, c)->
+    @case c,
+      'block-key': @rgx(double_quoted_one_line)
+      'flow-in': [ @double_quoted_multi_line, n ]
+      'flow-key': @rgx(double_quoted_one_line)
+      'flow-out': [ @double_quoted_multi_line, n ]
+
+
+
+  # [79]
+  # double-quoted-multi-line(n) ::=
+  #   double-quoted-first-line
+  #   (
+  #       double-quoted-next-line(n)
+  #     | blank-character*
+  #   )
+
+  double_quoted_multi_line: (n)->
+    @all(
+      @rgx(re_double_quoted_first_line)
+      @any(
+        [ @double_quoted_next_line, n ]
+        @rgx("#{blank_character}*")
+      )
+    )
+
+
+
+  # [80]
+  # double-quoted-one-line ::=
+  #   non-break-double-quoted-character*
+
+  double_quoted_one_line = ''
+
+  i080 = ->
+    [, double_quoted_one_line] = r ///
+      #{non_break_double_quoted_character}*
+    ///
+
+
+
+  # [81]
+  # double-quoted-first-line ::=
+  #   (
+  #     blank-character*
+  #     non-space-double-quoted-character
+  #   )*
+
+  re_double_quoted_first_line = ''
+
+  i081 = ->
+    [, re_double_quoted_first_line] = r ///
+      (?:
+        #{blank_character}*
+        #{non_space_double_quoted_character}
+      )*
+    ///
+
+
+
+  # [82]
+  # double-quoted-next-line(n) ::=
+  #   (
+  #       double-quoted-line-continuation(n)
+  #     | flow-folded-whitespace(n)
+  #   )
+  #   (
+  #     non-space-double-quoted-character
+  #     double-quoted-first-line
+  #     (
+  #         double-quoted-next-line(n)
+  #       | blank-character*
+  #     )
+  #   )?
+
+  double_quoted_next_line: (n)->
+    @all(
+      @any(
+        [ @double_quoted_line_continuation, n ]
+        [ @flow_folded_whitespace, n ]
+      )
+      @rep(0, 1,
+        @all(
+          @rgx(re_non_space_double_quoted_character)
+          @rgx(re_double_quoted_first_line)
+          @any(
+            [ @double_quoted_next_line, n ]
+            @rgx("#{blank_character}*")
+          )
+        )
+      )
+    )
+
+
+
+  # [83]
+  # non-space-double-quoted-character ::=
+  #     non-break-double-quoted-character
+  #   - blank-character
+
+  [non_space_double_quoted_character, re_non_space_double_quoted_character] = []
+
+  i083 = ->
+    [non_space_double_quoted_character, re_non_space_double_quoted_character] = r ///
+      (?! #{blank_character})
+      #{non_break_double_quoted_character}
+    ///
+
+
+
+  # [84]
+  # non-break-double-quoted-character ::=
+  #     double-quoted-scalar-escape-character
+  #   | (
+  #         json-character
+  #       - '\'
+  #       - '"'
+  #     )
+
+  non_break_double_quoted_character = ''
+
+  i084 = ->
+    [non_break_double_quoted_character] = r ///
+      (?:
+        #{double_quoted_scalar_escape_character}
+      |
+        (?! [ \\ " ])
+        #{json_character}
+      )
+    ///
+
+
+
+  # [85]
+  # double-quoted-line-continuation(n) ::=
+  #   blank-character*
+  #   '\'
+  #   line-break
+  #   empty-line(n,FLOW-IN)*
+  #   indentation-spaces-plus-maybe-more(n)
+
+  double_quoted_line_continuation: (n)->
     @all(
       @rgx(///
-        (?:
-          Y A M L
-          #{s_separate_in_line}
-        )
+        #{blank_character}*
+        \\
+        #{line_break}
       ///y)
-      @ns_yaml_version
+      @rep(0, null, [ @empty_line, n, "flow-in" ])
+      [ @indentation_spaces_plus_maybe_more, n ]
     )
+
+
+
+  # [086]  # XXX fix typo in 1.3.0 spec
+  # flow-mapping-context(n,FLOW-OUT)  ::= flow-sequence-entries(n,FLOW-IN)
+  # flow-mapping-context(n,FLOW-IN)   ::= flow-sequence-entries(n,FLOW-IN)
+  # flow-mapping-context(n,BLOCK-KEY) ::= flow-sequence-entries(n,FLOW-KEY)
+  # flow-mapping-context(n,FLOW-KEY)  ::= flow-sequence-entries(n,FLOW-KEY)
+
+  flow_mapping_context: (n, c)->
+    @case c,
+      'flow-out': [ @flow_mapping_entries, n, "flow-in" ]
+      'flow-in': [ @flow_mapping_entries, n, "flow-in" ]
+      'block-key': [ @flow_mapping_entries, n, "flow-key" ]
+      'flow-key': [ @flow_mapping_entries, n, "flow-key" ]
 
 
 
   # [087]
-  # ns-yaml-version ::=
-  #   ns-dec-digit+ '.' ns-dec-digit+
+  # flow-sequence-context(n,FLOW-OUT)  ::= flow-sequence-entries(n,FLOW-IN)
+  # flow-sequence-context(n,FLOW-IN)   ::= flow-sequence-entries(n,FLOW-IN)
+  # flow-sequence-context(n,BLOCK-KEY) ::= flow-sequence-entries(n,FLOW-KEY)
+  # flow-sequence-context(n,FLOW-KEY)  ::= flow-sequence-entries(n,FLOW-KEY)
 
-  ns_yaml_version: ->
-    @rgx(///
-      #{ns_dec_digit}+
-      \.
-      #{ns_dec_digit}+
-    ///y)
+  flow_sequence_context: (n, c)->
+    @case c,
+      'flow-out': [ @flow_sequence_entries, n, "flow-in" ]
+      'flow-in': [ @flow_sequence_entries, n, "flow-in" ]
+      'block-key': [ @flow_sequence_entries, n, "flow-key" ]
+      'flow-key': [ @flow_sequence_entries, n, "flow-key" ]
 
 
 
-  # [088]
-  # ns-tag-directive ::=
-  #   'T' 'A' 'G'
-  #   s-separate-in-line c-tag-handle
-  #   s-separate-in-line ns-tag-prefix
+  # [88]
+  # single-quoted-scalar(n,c) ::=
+  #   "'"
+  #   single-quoted-text(n,c)
+  #   "'"
 
-  ns_tag_directive: ->
+  single_quoted_scalar: (n, c)->
     @all(
-      @rgx(///
-        T A G
-        #{s_separate_in_line}
-      ///y)
-      @c_tag_handle
-      @rgx(re_s_separate_in_line)
-      @ns_tag_prefix
+      @chr("'")
+      [ @single_quoted_text, n, c ]
+      @chr("'")
     )
 
 
 
-  # [090]
-  # c-primary-tag-handle ::=
-  #   '!'
+  # [89]
+  # single-quoted-text(BLOCK-KEY) ::= single-quoted-one-line
+  # single-quoted-text(FLOW-KEY)  ::= single-quoted-one-line
+  # single-quoted-text(FLOW-OUT)  ::= single-quoted-multi-line(n)
+  # single-quoted-text(FLOW-IN)   ::= single-quoted-multi-line(n)
 
-  c_primary_tag_handle = "!"
-
-
-
-  # [091]
-  # c-secondary-tag-handle ::=
-  #   '!' '!'
-
-  c_secondary_tag_handle = "!!"
-
-
-
-  # [092]
-  # c-named-tag-handle ::=
-  #   '!' ns-word-char+ '!'
-
-  [c_named_tag_handle] = r ///
-    !
-    #{ns_word_char}+
-    !
-  ///
+  single_quoted_text: (n, c)->
+    @case c,
+      'block-key': @rgx(re_single_quoted_one_line)
+      'flow-in': [ @single_quoted_multi_line, n ]
+      'flow-key': @rgx(re_single_quoted_one_line)
+      'flow-out': [ @single_quoted_multi_line, n ]
 
 
 
-  # [089]
-  # c-tag-handle ::=
-  #   c-named-tag-handle
-  #   | c-secondary-tag-handle
-  #   | c-primary-tag-handle
+  # [90]
+  # single-quoted-multi-line(n) ::=
+  #   single-quoted-first-line
+  #   (
+  #       single-quoted-next-line(n)
+  #     | blank-character*
+  #   )
 
-  [c_tag_handle, re_c_tag_handle] = r ///
-    (?:
-      #{c_named_tag_handle}
-    | #{c_secondary_tag_handle}
-    | #{c_primary_tag_handle}
+  single_quoted_multi_line: (n)->
+    @all(
+      @rgx(re_single_quoted_first_line)
+      @any(
+        [ @single_quoted_next_line, n ]
+        @rgx("#{blank_character}*")
+      )
     )
-  ///
-
-  c_tag_handle: ->
-    @rgx(re_c_tag_handle)
 
 
 
-  # [094]
-  # c-ns-local-tag-prefix ::=
-  #   '!' ns-uri-char*
+  # [91]
+  # single-quoted-one-line ::=
+  #   non-break-single-quoted-character*
 
-  [c_ns_local_tag_prefix] = r ///
-    !
-    #{ns_uri_char}*
-  ///
+  re_single_quoted_one_line = ''
 
-
-
-  # [095]
-  # ns-global-tag-prefix ::=
-  #   ns-tag-char ns-uri-char*
-
-  [ns_global_tag_prefix] = r ///
-    #{ns_tag_char}
-    #{ns_uri_char}*
-  ///
+  i091 = ->
+    [, re_single_quoted_one_line] = r ///
+      #{non_break_single_quoted_character}*
+    ///
 
 
 
-  # [093]
-  # ns-tag-prefix ::=
-  #   c-ns-local-tag-prefix | ns-global-tag-prefix
+  # [92]
+  # single-quoted-first-line ::=
+  #   (
+  #     blank-character*
+  #     non-space-single-quoted-character
+  #   )*
 
-  ns_tag_prefix: ->
-    @rgx(///
+  [single_quoted_first_line, re_single_quoted_first_line] = []
+
+  i092 = ->
+    [single_quoted_first_line, re_single_quoted_first_line] = r ///
       (?:
-        #{c_ns_local_tag_prefix}
-      | #{ns_global_tag_prefix}
-      )
-    ///y)
+        #{blank_character}*
+        #{non_space_single_quoted_character}
+      )*
+    ///
 
 
 
-  # [096]
-  # c-ns-properties(n,c) ::=
-  #   ( c-ns-tag-property
-  #   ( s-separate(n,c) c-ns-anchor-property )? )
-  #   | ( c-ns-anchor-property
-  #   ( s-separate(n,c) c-ns-tag-property )? )
+  # [93]
+  # single-quoted-next-line(n) ::=
+  #   flow-folded-whitespace(n)
+  #   (
+  #     non-space-single-quoted-character
+  #     single-quoted-first-line
+  #     (
+  #         single-quoted-next-line(n)
+  #       | blank-character*
+  #     )
+  #   )?
 
-  c_ns_properties: (n, c)->
-    @any(
-      @all(
-        @c_ns_tag_property
-        @rep(0, 1,
-          @all(
-            [ @s_separate, n, c ]
-            @c_ns_anchor_property
-          )
-        )
-      )
-      @all(
-        @c_ns_anchor_property
-        @rep(0, 1,
-          @all(
-            [ @s_separate, n, c ]
-            @c_ns_tag_property
+  re_single_quoted_next_line = ''
+
+  i093 = ->
+    [, re_single_quoted_next_line] = r ///
+      #{non_space_single_quoted_character}
+      #{single_quoted_first_line}
+    ///
+
+  single_quoted_next_line: (n)->
+    @all(
+      [ @flow_folded_whitespace, n ]
+      @rep(0, 1,
+        @all(
+          @rgx(re_single_quoted_next_line)
+          @any(
+            [ @single_quoted_next_line, n ]
+            @rgx("#{blank_character}*")
           )
         )
       )
@@ -1433,406 +1823,189 @@ global.Grammar = class Grammar
 
 
 
-  # [098]
-  # c-verbatim-tag ::=
-  #   '!' '<' ns-uri-char+ '>'
+  # [94]
+  # non-space-single-quoted-character ::=
+  #     non-break-single-quoted-character
+  #   - blank-character
 
-  [c_verbatim_tag] = r ///
+  non_space_single_quoted_character = ''
+
+  i094 = ->
+    [non_space_single_quoted_character] = r ///
       (?:
-        !
-        <
-          #{ns_uri_char}+
-        >
+        (?! #{blank_character})
+        #{non_break_single_quoted_character}
       )
-  ///
+    ///
 
 
 
-  # [099]
-  # c-ns-shorthand-tag ::=
-  #   c-tag-handle ns-tag-char+
+  # [95]
+  # non-break-single-quoted-character ::=
+  #     single-quoted-escaped-single-quote
+  #   | (
+  #         json-character
+  #       - "'"
+  #     )
 
-  [c_ns_shorthand_tag] = r ///
-    (
-      #{c_tag_handle}
-      #{ns_tag_char}+
+  non_break_single_quoted_character = ''
+
+  i095 = ->
+    [non_break_single_quoted_character] = r ///
+      (?:
+        #{single_quoted_escaped_single_quote}
+      | (?:
+          (?! ')
+          #{json_character}
+        )
+      )
+    ///
+
+
+
+  # [96]
+  # single-quoted-escaped-single-quote ::=
+  #   "''"
+
+  single_quoted_escaped_single_quote = ''
+
+  i096 = ->
+    [single_quoted_escaped_single_quote] = r ///
+      '
+      '
+    ///
+
+
+
+  # [97]
+  # flow-plain-scalar(n,FLOW-OUT)  ::= plain-scalar-multi-line(n,FLOW-OUT)
+  # flow-plain-scalar(n,FLOW-IN)   ::= plain-scalar-multi-line(n,FLOW-IN)
+  # flow-plain-scalar(n,BLOCK-KEY) ::= plain-scalar-single-line(BLOCK-KEY)
+  # flow-plain-scalar(n,FLOW-KEY)  ::= plain-scalar-single-line(FLOW-KEY)
+
+  flow_plain_scalar: (n, c)->
+    @case c,
+      'block-key': [ @plain_scalar_single_line, c ]
+      'flow-in': [ @plain_scalar_multi_line, n, c ]
+      'flow-key': [ @plain_scalar_single_line, c ]
+      'flow-out': [ @plain_scalar_multi_line, n, c ]
+
+
+
+  # [98]
+  # plain-scalar-multi-line(n,c) ::=
+  #   plain-scalar-single-line(c)
+  #   plain-scalar-next-line(n,c)*
+
+  plain_scalar_multi_line: (n, c)->
+    @all(
+      [ @plain_scalar_single_line, c ]
+      @rep(0, null, [ @plain_scalar_next_line, n, c ])
     )
-  ///
+
+
+
+  # [99]
+  # plain-scalar-single-line(c) ::=
+  #   plain-scalar-first-character(c)
+  #   plain-scalar-line-characters(c)
+
+  plain_scalar_single_line: (c)->
+    @all(
+      [ @plain_scalar_first_character, c ]
+      [ @plain_scalar_line_characters, c ]
+    )
 
 
 
   # [100]
-  # c-non-specific-tag ::=
-  #   '!'
+  # plain-scalar-next-line(n,c) ::=
+  #   flow-folded-whitespace(n)
+  #   plain-scalar-characters(c)
+  #   plain-scalar-line-characters(c)
 
-  c_non_specific_tag = "!"
-
-
-
-  # [097]
-  # c-ns-tag-property ::=
-  #   c-verbatim-tag
-  #   | c-ns-shorthand-tag
-  #   | c-non-specific-tag
-
-  c_ns_tag_property: ->
-    @rgx(///
-      (?:
-        #{c_verbatim_tag}
-      | #{c_ns_shorthand_tag}
-      | #{c_non_specific_tag}
-      )
-    ///y)
-
-
-
-  # [102]
-  # ns-anchor-char ::=
-  #   ns-char - c-flow-indicator
-
-  [ns_anchor_char] = r ///
-    (?:
-      (?!
-        #{c_flow_indicator}
-      )
-      #{ns_char}
-    )+
-  ///u
-
-
-
-  # [103]
-  # ns-anchor-name ::=
-  #   ns-anchor-char+
-
-  [ns_anchor_name] = r ///
-    (?:
-      #{ns_anchor_char}
-    )+
-  ///u
+  plain_scalar_next_line: (n, c)->
+    @all(
+      [ @flow_folded_whitespace, n ]
+      [ @plain_scalar_characters, c ]
+      [ @plain_scalar_line_characters, c ]
+    )
 
 
 
   # [101]
-  # c-ns-anchor-property ::=
-  #   '&' ns-anchor-name
+  # plain-scalar-line-characters(c) ::=
+  #   (
+  #     blank-character*
+  #     plain-scalar-characters(c)
+  #   )*
 
-  c_ns_anchor_property: ->
-    @rgx(///
-      &
-      #{ns_anchor_name}
-    ///yu)
-
-
-
-  # [104]
-  # c-ns-alias-node ::=
-  #   '*' ns-anchor-name
-
-  c_ns_alias_node: ->
-    @rgx(///
-      \*
-      #{ns_anchor_name}
-    ///yu)
-
-
-
-  # [106]
-  # e-node ::=
-  #   e-scalar
-
-  e_node: ->
-    @empty
-
-
-
-  # [107]
-  # nb-double-char ::=
-  #   c-ns-esc-char | ( nb-json - '\' - '"' )
-
-  [nb_double_char] = r ///
-    (?:
-      #{c_ns_esc_char}
-    |
-      (?! [ \\ " ])
-      #{nb_json}
-    )
-  ///
-
-
-
-  # [108]
-  # ns-double-char ::=
-  #   nb-double-char - s-white
-
-  [ns_double_char, re_ns_double_char] = r ///
-    (?! #{s_white})
-    #{nb_double_char}
-  ///
-
-
-
-  # [109]
-  # c-double-quoted(n,c) ::=
-  #   '"' nb-double-text(n,c)
-  #   '"'
-
-  c_double_quoted: (n, c)->
-    @all(
-      @chr('"')
-      [ @nb_double_text, n, c ]
-      @chr('"')
-    )
-
-
-
-  # [110]
-  # nb-double-text(n,c) ::=
-  #   ( c = flow-out => nb-double-multi-line(n) )
-  #   ( c = flow-in => nb-double-multi-line(n) )
-  #   ( c = block-key => nb-double-one-line )
-  #   ( c = flow-key => nb-double-one-line )
-
-  nb_double_text: (n, c)->
-    @case c,
-      'block-key': @rgx(re_nb_double_one_line)
-      'flow-in': [ @nb_double_multi_line, n ]
-      'flow-key': @rgx(re_nb_double_one_line)
-      'flow-out': [ @nb_double_multi_line, n ]
-
-
-
-  # [111]
-  # nb-double-one-line ::=
-  #   nb-double-char*
-
-  [, re_nb_double_one_line] = r ///
-    #{nb_double_char}*
-  ///
-
-
-
-  # [112]
-  # s-double-escaped(n) ::=
-  #   s-white* '\'
-  #   b-non-content
-  #   l-empty(n,flow-in)* s-flow-line-prefix(n)
-
-  s_double_escaped: (n)->
-    @all(
-      @rgx(///
-        #{s_white}*
-        \\
-        #{b_non_content}
-      ///y)
-      @rep2(0, null, [ @l_empty, n, "flow-in" ])
-      [ @s_flow_line_prefix, n ]
-    )
-
-
-
-  # [114]
-  # nb-ns-double-in-line ::=
-  #   ( s-white* ns-double-char )*
-
-  [, re_nb_ns_double_in_line] = r ///
-    (?:
-      #{s_white}*
-      #{ns_double_char}
-    )*
-  ///
-
-
-
-  # [115]
-  # s-double-next-line(n) ::=
-  #   s-double-break(n)
-  #   ( ns-double-char nb-ns-double-in-line
-  #   ( s-double-next-line(n) | s-white* ) )?
-
-  s_double_next_line: (n)->
-    @all(
-      @any(
-        [ @s_double_escaped, n ]
-        [ @s_flow_folded, n ]
-      )
-      @rep(0, 1,
-        @all(
-          @rgx(re_ns_double_char)
-          @rgx(re_nb_ns_double_in_line)
-          @any(
-            [ @s_double_next_line, n ]
-            @rgx("#{s_white}*")
-          )
-        )
+  plain_scalar_line_characters: (c)->
+    @rep(0, null,
+      @all(
+        @rgx("#{blank_character}*")
+        [ @plain_scalar_characters, c ]
       )
     )
 
 
 
-  # [116]
-  # nb-double-multi-line(n) ::=
-  #   nb-ns-double-in-line
-  #   ( s-double-next-line(n) | s-white* )
+  # [102]
+  # plain-scalar-first-character(c) ::=
+  #     (
+  #         non-space-character
+  #       - '?'                         # Mapping key
+  #       - ':'                         # Mapping value
+  #       - '-'                         # Sequence entry
+  #       - '{'                         # Mapping start
+  #       - '}'                         # Mapping end
+  #       - '['                         # Sequence start
+  #       - ']'                         # Sequence end
+  #       - ','                         # Entry separator
+  #       - '#'                         # Comment
+  #       - '&'                         # Anchor
+  #       - '*'                         # Alias
+  #       - '!'                         # Tag
+  #       - '|'                         # Literal scalar
+  #       - '>'                         # Folded scalar
+  #       - "'"                         # Single quote
+  #       - '"'                         # Double quote
+  #       - '%'                         # Directive
+  #       - '@'                         # Reserved
+  #       - '`'                         # Reserved
+  #     )
+  #   | (
+  #       ( '?' | ':' | '-' )
+  #       [ lookahead = non-space-plain-scalar-character(c) ]
+  #     )
 
-  nb_double_multi_line: (n)->
-    @all(
-      @rgx(re_nb_ns_double_in_line)
-      @any(
-        [ @s_double_next_line, n ]
-        @rgx("#{s_white}*")
-      )
-    )
-
-
-
-  # [117]
-  # c-quoted-quote ::=
-  #   ''' '''
-
-  [c_quoted_quote] = r ///
-    '
-    '
-  ///
-
-
-
-  # [118]
-  # nb-single-char ::=
-  #   c-quoted-quote | ( nb-json - ''' )
-
-  [nb_single_char] = r ///
-    (?:
-      #{c_quoted_quote}
-    | (?:
-        (?! ')
-        #{nb_json}
-      )
-    )
-  ///
-
-
-
-  # [119]
-  # ns-single-char ::=
-  #   nb-single-char - s-white
-
-  [ns_single_char] = r ///
-    (?:
-      (?! #{s_white})
-      #{nb_single_char}
-    )
-  ///
-
-
-
-  # [120]
-  # c-single-quoted(n,c) ::=
-  #   ''' nb-single-text(n,c)
-  #   '''
-
-  c_single_quoted: (n, c)->
-    @all(
-      @chr("'")
-      [ @nb_single_text, n, c ]
-      @chr("'")
-    )
-
-
-
-  # [121]
-  # nb-single-text(n,c) ::=
-  #   ( c = flow-out => nb-single-multi-line(n) )
-  #   ( c = flow-in => nb-single-multi-line(n) )
-  #   ( c = block-key => nb-single-one-line )
-  #   ( c = flow-key => nb-single-one-line )
-
-  nb_single_text: (n, c)->
-    @case c,
-      'block-key': @rgx(re_nb_single_one_line)
-      'flow-in': [ @nb_single_multi_line, n ]
-      'flow-key': @rgx(re_nb_single_one_line)
-      'flow-out': [ @nb_single_multi_line, n ]
-
-
-
-  # [122]
-  # nb-single-one-line ::=
-  #   nb-single-char*
-
-  [, re_nb_single_one_line] = r ///
-    #{nb_single_char}*
-  ///
-
-
-
-  # [123]
-  # nb-ns-single-in-line ::=
-  #   ( s-white* ns-single-char )*
-
-  [nb_ns_single_in_line, re_nb_ns_single_in_line] = r ///
-    (?:
-      #{s_white}*
-      #{ns_single_char}
-    )*
-  ///
-
-
-
-  # [124]
-  # s-single-next-line(n) ::=
-  #   s-flow-folded(n)
-  #   ( ns-single-char nb-ns-single-in-line
-  #   ( s-single-next-line(n) | s-white* ) )?
-
-  [, re_s_single_next_line] = r ///
-    #{ns_single_char}
-    #{nb_ns_single_in_line}
-  ///
-
-  s_single_next_line: (n)->
-    @all(
-      [ @s_flow_folded, n ]
-      @rep(0, 1,
-        @all(
-          @rgx(re_s_single_next_line)
-          @any(
-            [ @s_single_next_line, n ]
-            @rgx("#{s_white}*")
-          )
-        )
-      )
-    )
-
-
-
-  # [125]
-  # nb-single-multi-line(n) ::=
-  #   nb-ns-single-in-line
-  #   ( s-single-next-line(n) | s-white* )
-
-  nb_single_multi_line: (n)->
-    @all(
-      @rgx(re_nb_ns_single_in_line)
-      @any(
-        [ @s_single_next_line, n ]
-        @rgx("#{s_white}*")
-      )
-    )
-
-
-
-  # [126]
-  # ns-plain-first(c) ::=
-  #   ( ns-char - c-indicator )
-  #   | ( ( '?' | ':' | '-' )
-  #   <followed_by_an_ns-plain-safe(c)> )
-
-  ns_plain_first: (c)->
+  plain_scalar_first_character: (c)->
     @any(
       @rgx(///
-        (?! #{c_indicator})
-        #{ns_char}
+        (?!
+          [
+            -
+            ?
+            :
+            ,
+            [
+            \]
+            {
+            }
+            \x23     # '#'
+            &
+            *
+            !
+            |
+            >
+            '
+            "
+            %
+            @
+            `
+          ]
+        )
+        #{non_space_character}
       ///yu)
       @all(
         @rgx(///
@@ -1842,951 +2015,1248 @@ global.Grammar = class Grammar
             -
           ]
         ///y)
-        @chk('=', [ @ns_plain_safe, c ])
+        @chk('=', [ @non_space_plain_scalar_character, c ])
       )
     )
 
 
 
-  # [127]
-  # ns-plain-safe(c) ::=
-  #   ( c = flow-out => ns-plain-safe-out )
-  #   ( c = flow-in => ns-plain-safe-in )
-  #   ( c = block-key => ns-plain-safe-out )
-  #   ( c = flow-key => ns-plain-safe-in )
+  # [103]
+  # plain-scalar-characters(c) ::=
+  #     (
+  #         non-space-plain-scalar-character(c)
+  #       - ':'
+  #       - '#'
+  #     )
+  #   | (
+  #       [ lookbehind = non-space-character ]
+  #       '#'
+  #     )
+  #   | (
+  #       ':'
+  #       [ lookahead = non-space-plain-scalar-character(c) ]
+  #     )
 
-  ns_plain_safe: (c)->
-    @case c,
-      'block-key': @rgx(re_ns_plain_safe_out)
-      'flow-in': @rgx(re_ns_plain_safe_in)
-      'flow-key': @rgx(re_ns_plain_safe_in)
-      'flow-out': @rgx(re_ns_plain_safe_out)
+# TODO
+#   plain_scalar_characters = (c)->
+#     non_space_plain_scalar_character = ...
+#     ///
+#       (?:
+#         (?:
+#           (?!
+#             [
+#               :
+#               \x23        # '#'
+#             ]
+#           )
+# 
+#     ///yu
 
-
-
-  # [128]
-  # ns-plain-safe-out ::=
-  #   ns-char
-
-  [, re_ns_plain_safe_out] = r ///
-    (?: #{ns_char} )
-  ///u
-
-
-
-  # [129]
-  # ns-plain-safe-in ::=
-  #   ns-char - c-flow-indicator
-
-  [, re_ns_plain_safe_in] = r ///
-    (?:
-      (?!
-        #{c_flow_indicator}
-      )
-      #{ns_char}
-    )
-  ///u
-
-
-
-  # [130]
-  # ns-plain-char(c) ::=
-  #   ( ns-plain-safe(c) - ':' - '#' )
-  #   | ( <an_ns-char_preceding> '#' )
-  #   | ( ':' <followed_by_an_ns-plain-safe(c)> )
-
-  ns_plain_char: (c)->
+  plain_scalar_characters: (c)->
     @any(
       @but(
-        [ @ns_plain_safe, c ]
+        [ @non_space_plain_scalar_character, c ]
         @chr(':')
         @chr('#')
       )
       @all(
-        @chk('<=', @rgx(re_ns_char))
+        @chk('<=', @rgx(re_non_space_character))
         @chr('#')
       )
       @all(
         @chr(':')
-        @chk('=', [ @ns_plain_safe, c ])
+        @chk('=', [ @non_space_plain_scalar_character, c ])
       )
     )
 
 
 
-  # [131]
-  # ns-plain(n,c) ::=
-  #   ( c = flow-out => ns-plain-multi-line(n,c) )
-  #   ( c = flow-in => ns-plain-multi-line(n,c) )
-  #   ( c = block-key => ns-plain-one-line(c) )
-  #   ( c = flow-key => ns-plain-one-line(c) )
+  # [104]
+  # non-space-plain-scalar-character(FLOW-OUT)  ::= block-plain-scalar-character
+  # non-space-plain-scalar-character(FLOW-IN)   ::= flow-plain-scalar-character
+  # non-space-plain-scalar-character(BLOCK-KEY) ::= block-plain-scalar-character
+  # non-space-plain-scalar-character(FLOW-KEY)  ::= flow-plain-scalar-character
 
-  ns_plain: (n, c)->
+  non_space_plain_scalar_character: (c)->
     @case c,
-      'block-key': [ @ns_plain_one_line, c ]
-      'flow-in': [ @ns_plain_multi_line, n, c ]
-      'flow-key': [ @ns_plain_one_line, c ]
-      'flow-out': [ @ns_plain_multi_line, n, c ]
+      'block-key': @block_plain_scalar_character
+      'flow-in': @flow_plain_scalar_character
+      'flow-key': @flow_plain_scalar_character
+      'flow-out': @block_plain_scalar_character
 
 
 
-  # [132]
-  # nb-ns-plain-in-line(c) ::=
-  #   ( s-white*
-  #   ns-plain-char(c) )*
+  # [105]
+  # block-plain-scalar-character ::=
+  #   non-space-character
 
-  nb_ns_plain_in_line: (c)->
-    @rep(0, null,
-      @all(
-        @rgx("#{s_white}*")
-        [ @ns_plain_char, c ]
-      )
-    )
+  block_plain_scalar_character: ->
+    @rgx(///
+      (?: #{non_space_character} )
+    ///yu)
 
 
 
-  # [133]
-  # ns-plain-one-line(c) ::=
-  #   ns-plain-first(c)
-  #   nb-ns-plain-in-line(c)
+  # [106]
+  # flow-plain-scalar-character ::=
+  #     non-space-characters
+  #   - flow-collection-indicators
 
-  ns_plain_one_line: (c)->
-    @all(
-      [ @ns_plain_first, c ]
-      [ @nb_ns_plain_in_line, c ]
-    )
-
-
-
-  # [134]
-  # s-ns-plain-next-line(n,c) ::=
-  #   s-flow-folded(n)
-  #   ns-plain-char(c) nb-ns-plain-in-line(c)
-
-  s_ns_plain_next_line: (n, c)->
-    @all(
-      [ @s_flow_folded, n ]
-      [ @ns_plain_char, c ]
-      [ @nb_ns_plain_in_line, c ]
-    )
-
-
-
-  # [135]
-  # ns-plain-multi-line(n,c) ::=
-  #   ns-plain-one-line(c)
-  #   s-ns-plain-next-line(n,c)*
-
-  ns_plain_multi_line: (n, c)->
-    @all(
-      [ @ns_plain_one_line, c ]
-      @rep(0, null, [ @s_ns_plain_next_line, n, c ])
-    )
-
-
-
-  # [136]
-  # in-flow(c) ::=
-  #   ( c = flow-out => flow-in )
-  #   ( c = flow-in => flow-in )
-  #   ( c = block-key => flow-key )
-  #   ( c = flow-key => flow-key )
-
-  in_flow: (c)->
-    @flip c,
-      'block-key': "flow-key"
-      'flow-in': "flow-in"
-      'flow-key': "flow-key"
-      'flow-out': "flow-in"
-
-
-
-  # [137]
-  # c-flow-sequence(n,c) ::=
-  #   '[' s-separate(n,c)?
-  #   ns-s-flow-seq-entries(n,in-flow(c))? ']'
-
-  c_flow_sequence: (n, c)->
-    @all(
-      @chr('[')
-      @rep(0, 1, [ @s_separate, n, c ])
-      @rep2(0, 1, [ @ns_s_flow_seq_entries, n, [ @in_flow, c ] ])
-      @chr(']')
-    )
-
-
-
-  # [138]
-  # ns-s-flow-seq-entries(n,c) ::=
-  #   ns-flow-seq-entry(n,c)
-  #   s-separate(n,c)?
-  #   ( ',' s-separate(n,c)?
-  #   ns-s-flow-seq-entries(n,c)? )?
-
-  ns_s_flow_seq_entries: (n, c)->
-    @all(
-      [ @ns_flow_seq_entry, n, c ]
-      @rep(0, 1, [ @s_separate, n, c ])
-      @rep2(0, 1,
-        @all(
-          @chr(',')
-          @rep(0, 1, [ @s_separate, n, c ])
-          @rep2(0, 1, [ @ns_s_flow_seq_entries, n, c ])
+  flow_plain_scalar_character: ->
+    @rgx(///
+      (?:
+        (?!
+          #{flow_collection_indicator}
         )
+        #{non_space_character}
       )
-    )
+    ///yu)
 
 
 
-  # [139]
-  # ns-flow-seq-entry(n,c) ::=
-  #   ns-flow-pair(n,c) | ns-flow-node(n,c)
+  # [107]
+  # alias-node ::=
+  #   '*'
+  #   anchor-name
 
-  ns_flow_seq_entry: (n, c)->
-    @any(
-      [ @ns_flow_pair, n, c ]
-      [ @ns_flow_node, n, c ]
-    )
+  alias_node: ->
+    @rgx(///
+      \*
+      #{anchor_name}
+    ///yu)
 
 
 
-  # [140]
-  # c-flow-mapping(n,c) ::=
-  #   '{' s-separate(n,c)?
-  #   ns-s-flow-map-entries(n,in-flow(c))? '}'
+  # [108]
+  # empty-node ::=
+  #   ""
 
-  c_flow_mapping: (n, c)->
+  empty_node: ->
+    @empty
+
+
+
+  # [109]
+  # indentation-spaces(0) ::=
+  #   ""
+
+  indentation_spaces: ->
+    @rgx(/// #{space_character}* ///y)
+
+  # indentation-spaces(n+1) ::=
+  #   space-character
+  #   indentation-spaces(n)
+
+  # When n≥0
+
+  indentation_spaces_n: (n)->
+    @rgx(/// #{space_character}{#{n}} ///y)
+
+
+
+  # [110]
+  # indentation-spaces-less-than(1) ::=
+  #   ""
+
+  # # When n≥1
+
+  indentation_spaces_less_than: (n)->
     @all(
-      @chr('{')
-      @rep(0, 1, [ @s_separate, n, c ])
-      @rep2(0, 1, [ @ns_s_flow_map_entries, n, [ @in_flow, c ] ])
-      @chr('}')
+      @indentation_spaces()
+      @lt(@len(@match), n)
     )
 
 
 
-  # [141]
-  # ns-s-flow-map-entries(n,c) ::=
-  #   ns-flow-map-entry(n,c)
-  #   s-separate(n,c)?
-  #   ( ',' s-separate(n,c)?
-  #   ns-s-flow-map-entries(n,c)? )?
+  # [111]
+  # indentation-spaces-less-or-equal(0) ::=
+  #   ""
 
-  ns_s_flow_map_entries: (n, c)->
+  # # When n≥0
+
+  indentation_spaces_less_or_equal: (n)->
     @all(
-      [ @ns_flow_map_entry, n, c ]
-      @rep(0, 1, [ @s_separate, n, c ])
-      @rep2(0, 1,
-        @all(
-          @chr(',')
-          @rep(0, 1, [ @s_separate, n, c ])
-          @rep2(0, 1, [ @ns_s_flow_map_entries, n, c ])
-        )
-      )
+      @indentation_spaces()
+      @le(@len(@match), n)
     )
 
 
 
-  # [142]
-  # ns-flow-map-entry(n,c) ::=
-  #   ( '?' s-separate(n,c)
-  #   ns-flow-map-explicit-entry(n,c) )
-  #   | ns-flow-map-implicit-entry(n,c)
+  # [112]
+  # line-prefix-spaces(n,BLOCK-OUT) ::= indentation-spaces-exact(n)
+  # line-prefix-spaces(n,BLOCK-IN)  ::= indentation-spaces-exact(n)
+  # line-prefix-spaces(n,FLOW-OUT)  ::= indentation-spaces-plus-maybe-more(n)
+  # line-prefix-spaces(n,FLOW-IN)   ::= indentation-spaces-plus-maybe-more(n)
 
-  ns_flow_map_entry: (n, c)->
+  line_prefix_spaces: (n, c)->
+    @case c,
+      'block-in': [ @indentation_spaces_exact, n ]
+      'block-out': [ @indentation_spaces_exact, n ]
+      'flow-in': [ @indentation_spaces_plus_maybe_more, n ]
+      'flow-out': [ @indentation_spaces_plus_maybe_more, n ]
+
+
+
+  # [113]
+  # indentation-spaces-exact(n) ::=
+  #   indentation-spaces(n)
+
+  indentation_spaces_exact: (n)->
+    @indentation_spaces_n(n)
+
+
+
+  # [114]
+  # indentation-spaces-plus-maybe-more(n) ::=
+  #   indentation-spaces(n)
+  #   separation-blanks?
+
+  indentation_spaces_plus_maybe_more: (n)->
+    @all(
+      @indentation_spaces_n(n)
+      @rep(0, 1, @rgx(re_separation_lines))
+    )
+
+
+
+  # [115]
+  # flow-folded-whitespace(n) ::=
+  #   separation-blanks?
+  #   folded-whitespace(n,FLOW-IN)
+  #   indentation-spaces-plus-maybe-more(n)
+
+  flow_folded_whitespace: (n)->
+    @all(
+      @rep(0, 1, @rgx(re_separation_lines))
+      [ @folded_whitespace, n, "flow-in" ]
+      [ @indentation_spaces_plus_maybe_more, n ]
+    )
+
+
+
+  # [116]
+  # folded-whitespace(n,c) ::=
+  #     (
+  #       line-break
+  #       empty-line(n,c)+
+  #     )
+  #   | break-as-space
+  # A.4.4. Comments
+
+  folded_whitespace: (n, c)->
     @any(
       @all(
-        @rgx(///
-          \?
-          #{ws_lookahead}
-        ///y)
-        [ @s_separate, n, c ]
-        [ @ns_flow_map_explicit_entry, n, c ]
+        @rgx(re_line_break)
+        @rep(1, null, [ @empty_line, n, c ])
       )
-      [ @ns_flow_map_implicit_entry, n, c ]
+      @rgx(re_break_as_space)
     )
 
 
 
-  # [143]
-  # ns-flow-map-explicit-entry(n,c) ::=
-  #   ns-flow-map-implicit-entry(n,c)
-  #   | ( e-node
-  #   e-node )
-
-  ns_flow_map_explicit_entry: (n, c)->
-    @any(
-      [ @ns_flow_map_implicit_entry, n, c ]
-      @all(
-        @e_node
-        @e_node
-      )
-    )
-
-
-
-  # [144]
-  # ns-flow-map-implicit-entry(n,c) ::=
-  #   ns-flow-map-yaml-key-entry(n,c)
-  #   | c-ns-flow-map-empty-key-entry(n,c)
-  #   | c-ns-flow-map-json-key-entry(n,c)
-
-  ns_flow_map_implicit_entry: (n, c)->
-    @any(
-      [ @ns_flow_map_yaml_key_entry, n, c ]
-      [ @c_ns_flow_map_empty_key_entry, n, c ]
-      [ @c_ns_flow_map_json_key_entry, n, c ]
-    )
-
-
-
-  # [145]
-  # ns-flow-map-yaml-key-entry(n,c) ::=
-  #   ns-flow-yaml-node(n,c)
-  #   ( ( s-separate(n,c)?
-  #   c-ns-flow-map-separate-value(n,c) )
-  #   | e-node )
-
-  ns_flow_map_yaml_key_entry: (n, c)->
-    @all(
-      [ @ns_flow_yaml_node, n, c ]
-      @any(
-        @all(
-          @rep(0, 1, [ @s_separate, n, c ])
-          [ @c_ns_flow_map_separate_value, n, c ]
-        )
-        @e_node
-      )
-    )
-
-
-
-  # [146]
-  # c-ns-flow-map-empty-key-entry(n,c) ::=
-  #   e-node
-  #   c-ns-flow-map-separate-value(n,c)
-
-  c_ns_flow_map_empty_key_entry: (n, c)->
-    @all(
-      @e_node
-      [ @c_ns_flow_map_separate_value, n, c ]
-    )
-
-
-
-  # [147]
-  # c-ns-flow-map-separate-value(n,c) ::=
-  #   ':' <not_followed_by_an_ns-plain-safe(c)>
-  #   ( ( s-separate(n,c) ns-flow-node(n,c) )
-  #   | e-node )
-
-  c_ns_flow_map_separate_value: (n, c)->
-    @all(
-      @chr(':')
-      @chk('!', [ @ns_plain_safe, c ])
-      @any(
-        @all(
-          [ @s_separate, n, c ]
-          [ @ns_flow_node, n, c ]
-        )
-        @e_node
-      )
-    )
-
-
-
-  # [148]
-  # c-ns-flow-map-json-key-entry(n,c) ::=
-  #   c-flow-json-node(n,c)
-  #   ( ( s-separate(n,c)?
-  #   c-ns-flow-map-adjacent-value(n,c) )
-  #   | e-node )
-
-  c_ns_flow_map_json_key_entry: (n, c)->
-    @all(
-      [ @c_flow_json_node, n, c ]
-      @any(
-        @all(
-          @rep(0, 1, [ @s_separate, n, c ])
-          [ @c_ns_flow_map_adjacent_value, n, c ]
-        )
-        @e_node
-      )
-    )
-
-
-
-  # [149]
-  # c-ns-flow-map-adjacent-value(n,c) ::=
-  #   ':' ( (
-  #   s-separate(n,c)?
-  #   ns-flow-node(n,c) )
-  #   | e-node )
-
-  c_ns_flow_map_adjacent_value: (n, c)->
-    @all(
-      @chr(':')
-      @any(
-        @all(
-          @rep(0, 1, [ @s_separate, n, c ])
-          [ @ns_flow_node, n, c ]
-        )
-        @e_node
-      )
-    )
-
-
-
-  # [150]
-  # ns-flow-pair(n,c) ::=
-  #   ( '?' s-separate(n,c)
-  #   ns-flow-map-explicit-entry(n,c) )
-  #   | ns-flow-pair-entry(n,c)
-
-  ns_flow_pair: (n, c)->
-    @any(
-      @all(
-        @rgx(///
-          \?
-          #{ws_lookahead}
-        ///)
-        [ @s_separate, n, c ]
-        [ @ns_flow_map_explicit_entry, n, c ]
-      )
-      [ @ns_flow_pair_entry, n, c ]
-    )
-
-
-
-  # [151]
-  # ns-flow-pair-entry(n,c) ::=
-  #   ns-flow-pair-yaml-key-entry(n,c)
-  #   | c-ns-flow-map-empty-key-entry(n,c)
-  #   | c-ns-flow-pair-json-key-entry(n,c)
-
-  ns_flow_pair_entry: (n, c)->
-    @any(
-      [ @ns_flow_pair_yaml_key_entry, n, c ]
-      [ @c_ns_flow_map_empty_key_entry, n, c ]
-      [ @c_ns_flow_pair_json_key_entry, n, c ]
-    )
-
-
-
-  # [152]
-  # ns-flow-pair-yaml-key-entry(n,c) ::=
-  #   ns-s-implicit-yaml-key(flow-key)
-  #   c-ns-flow-map-separate-value(n,c)
-
-  ns_flow_pair_yaml_key_entry: (n, c)->
-    @all(
-      [ @ns_s_implicit_yaml_key, "flow-key" ]
-      [ @c_ns_flow_map_separate_value, n, c ]
-    )
-
-
-
-  # [153]
-  # c-ns-flow-pair-json-key-entry(n,c) ::=
-  #   c-s-implicit-json-key(flow-key)
-  #   c-ns-flow-map-adjacent-value(n,c)
-
-  c_ns_flow_pair_json_key_entry: (n, c)->
-    @all(
-      [ @c_s_implicit_json_key, "flow-key" ]
-      [ @c_ns_flow_map_adjacent_value, n, c ]
-    )
-
-
-
-  # [154]
-  # ns-s-implicit-yaml-key(c) ::=
-  #   ns-flow-yaml-node(n/a,c)
-  #   s-separate-in-line?
-  #   <at_most_1024_characters_altogether>
-
-  ns_s_implicit_yaml_key: (c)->
-    @all(
-      @max(1024)
-      [ @ns_flow_yaml_node, null, c ]
-      @rep(0, 1, @rgx(re_s_separate_in_line))
-    )
-
-
-
-  # [155]
-  # c-s-implicit-json-key(c) ::=
-  #   c-flow-json-node(n/a,c)
-  #   s-separate-in-line?
-  #   <at_most_1024_characters_altogether>
-
-  c_s_implicit_json_key: (c)->
-    @all(
-      @max(1024)
-      [ @c_flow_json_node, null, c ]
-      @rep(0, 1, @rgx(re_s_separate_in_line))
-    )
-
-
-
-  # [156]
-  # ns-flow-yaml-content(n,c) ::=
-  #   ns-plain(n,c)
-
-  ns_flow_yaml_content: (n, c)->
-    [ @ns_plain, n, c ]
-
-
-
-  # [157]
-  # c-flow-json-content(n,c) ::=
-  #   c-flow-sequence(n,c) | c-flow-mapping(n,c)
-  #   | c-single-quoted(n,c) | c-double-quoted(n,c)
-
-  c_flow_json_content: (n, c)->
-    @any(
-      [ @c_flow_sequence, n, c ]
-      [ @c_flow_mapping, n, c ]
-      [ @c_single_quoted, n, c ]
-      [ @c_double_quoted, n, c ]
-    )
-
-
-
-  # [158]
-  # ns-flow-content(n,c) ::=
-  #   ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
-
-  ns_flow_content: (n, c)->
-    @any(
-      [ @ns_flow_yaml_content, n, c ]
-      [ @c_flow_json_content, n, c ]
-    )
-
-
-
-  # [159]
-  # ns-flow-yaml-node(n,c) ::=
-  #   c-ns-alias-node
-  #   | ns-flow-yaml-content(n,c)
-  #   | ( c-ns-properties(n,c)
-  #   ( ( s-separate(n,c)
-  #   ns-flow-yaml-content(n,c) )
-  #   | e-scalar ) )
-
-  ns_flow_yaml_node: (n, c)->
-    @any(
-      @c_ns_alias_node
-      [ @ns_flow_yaml_content, n, c ]
-      @all(
-        [ @c_ns_properties, n, c ]
-        @any(
-          @all(
-            [ @s_separate, n, c ]
-            [ @ns_flow_content, n, c ]
-          )
-          @e_node
-        )
-      )
-    )
-
-
-
-  # [160]
-  # c-flow-json-node(n,c) ::=
-  #   ( c-ns-properties(n,c)
-  #   s-separate(n,c) )?
-  #   c-flow-json-content(n,c)
-
-  c_flow_json_node: (n, c)->
-    @all(
-      @rep(0, 1,
-        @all(
-          [ @c_ns_properties, n, c ]
-          [ @s_separate, n, c ]
-        )
-      )
-      [ @c_flow_json_content, n, c ]
-    )
-
-
-
-  # [161]
-  # ns-flow-node(n,c) ::=
-  #   c-ns-alias-node
-  #   | ns-flow-content(n,c)
-  #   | ( c-ns-properties(n,c)
-  #   ( ( s-separate(n,c)
-  #   ns-flow-content(n,c) )
-  #   | e-scalar ) )
-
-  ns_flow_node: (n, c)->
-    @any(
-      @c_ns_alias_node
-      [ @ns_flow_content, n, c ]
-      @all(
-        [ @c_ns_properties, n, c ]
-        @any(
-          @all(
-            [ @s_separate, n, c ]
-            [ @ns_flow_content, n, c ]
-          )
-          @e_node
-        )
-      )
-    )
-
-
-
-  # [162]
-  # c-b-block-header(m,t) ::=
-  #   ( ( c-indentation-indicator(m)
-  #   c-chomping-indicator(t) )
-  #   | ( c-chomping-indicator(t)
-  #   c-indentation-indicator(m) ) )
-  #   s-b-comment
-
-  c_b_block_header: (n)->
+  # [117]
+  # comment-lines ::=
+  #     comment-line+
+  #   | <start-of-line>
+
+  comment_lines: ->
     @all(
       @any(
-        @all(
-          [ @c_indentation_indicator, n ]
-          @c_chomping_indicator
-          @rgx(ws_lookahead)
-        )
-        @all(
-          @c_chomping_indicator
-          [ @c_indentation_indicator, n ]
-          @rgx(ws_lookahead)
-        )
+        @comment_line
+        @start_of_line
       )
-      @s_b_comment
-    )
-
-
-
-  # [163]
-  # c-indentation-indicator(m) ::=
-  #   ( ns-dec-digit => m = ns-dec-digit - x:30 )
-  #   ( <empty> => m = auto-detect() )
-
-  c_indentation_indicator: (n)->
-    @any(
-      @if(@rng("\x31", "\x39"), @set('m', @ord(@match)))
-      @if(@empty, @set('m', [ @auto_detect, n ]))
-    )
-
-
-
-  # [164]
-  # c-chomping-indicator(t) ::=
-  #   ( '-' => t = strip )
-  #   ( '+' => t = keep )
-  #   ( <empty> => t = clip )
-
-  c_chomping_indicator: ->
-    @any(
-      @if(@chr('-'), @set('t', "strip"))
-      @if(@chr('+'), @set('t', "keep"))
-      @if(@empty, @set('t', "clip"))
-    )
-
-
-
-  # [165]
-  # b-chomped-last(t) ::=
-  #   ( t = strip => b-non-content | <end_of_file> )
-  #   ( t = clip => b-as-line-feed | <end_of_file> )
-  #   ( t = keep => b-as-line-feed | <end_of_file> )
-
-  b_chomped_last: (t)->
-    @case t,
-      'clip': @any( @rgx(re_b_as_line_feed), @end_of_stream )
-      'keep': @any( @rgx(re_b_as_line_feed), @end_of_stream )
-      'strip': @any( @rgx(re_b_non_content), @end_of_stream )
-
-
-
-  # [166]
-  # l-chomped-empty(n,t) ::=
-  #   ( t = strip => l-strip-empty(n) )
-  #   ( t = clip => l-strip-empty(n) )
-  #   ( t = keep => l-keep-empty(n) )
-
-  l_chomped_empty: (n, t)->
-    @case t,
-      'clip': [ @l_strip_empty, n ]
-      'keep': [ @l_keep_empty, n ]
-      'strip': [ @l_strip_empty, n ]
-
-
-
-  # [167]
-  # l-strip-empty(n) ::=
-  #   ( s-indent(<=n) b-non-content )*
-  #   l-trail-comments(n)?
-
-  l_strip_empty: (n)->
-    @all(
-      @rep(0, null,
-        @all(
-          [ @s_indent_le, n ]
-          @rgx(re_b_non_content)
-        )
-      )
-      @rep2(0, 1, [ @l_trail_comments, n ])
-    )
-
-
-
-  # [168]
-  # l-keep-empty(n) ::=
-  #   l-empty(n,block-in)*
-  #   l-trail-comments(n)?
-
-  l_keep_empty: (n)->
-    @all(
-      @rep(0, null, [ @l_empty, n, "block-in" ])
-      @rep2(0, 1, [ @l_trail_comments, n ])
-    )
-
-
-
-  # [169]
-  # l-trail-comments(n) ::=
-  #   s-indent(<n)
-  #   c-nb-comment-text b-comment
-  #   l-comment*
-
-  [, re_l_trail_comments] = r ///
-    #{c_nb_comment_text}
-    #{b_comment}
-  ///u
-
-  l_trail_comments: (n)->
-    @all(
-      [ @s_indent_lt, n ]
-      @rgx(re_l_trail_comments)
       @rep(0, null, @l_comment)
     )
 
 
 
-  # [170]
-  # c-l+literal(n) ::=
-  #   '|' c-b-block-header(m,t)
-  #   l-literal-content(n+m,t)
+  # [118]
+  # comment-line ::=
+  #   separation-blanks
+  #   comment-content?
+  #   line-ending
 
-  c_l_literal: (n)->
-    @all(
-      @chr('|')
-      [ @c_b_block_header, n ]
-      [ @l_literal_content, @add(n, @m()), @t() ]
-    )
-
-
-
-  # [171]
-  # l-nb-literal-text(n) ::=
-  #   l-empty(n,block-in)*
-  #   s-indent(n) nb-char+
-
-  l_nb_literal_text: (n)->
-    @all(
-      @rep(0, null, [ @l_empty, n, "block-in" ])
-      @rgx(s_indent_n(n))
-      @rep2(1, null, @rgx(re_nb_char))
-    )
-
-
-
-  # [172]
-  # b-nb-literal-next(n) ::=
-  #   b-as-line-feed
-  #   l-nb-literal-text(n)
-
-  b_nb_literal_next: (n)->
-    @all(
-      @rgx(re_b_as_line_feed)
-      [ @l_nb_literal_text, n ]
-    )
-
-
-
-  # [173]
-  # l-literal-content(n,t) ::=
-  #   ( l-nb-literal-text(n)
-  #   b-nb-literal-next(n)*
-  #   b-chomped-last(t) )?
-  #   l-chomped-empty(n,t)
-
-  l_literal_content: (n, t)->
+  comment_line: ->
     @all(
       @rep(0, 1,
         @all(
-          [ @l_nb_literal_text, n ]
-          @rep(0, null, [ @b_nb_literal_next, n ])
-          [ @b_chomped_last, t ]
+          @rgx(re_separation_lines)
+          @rgx(/// #{comment_content}? ///yu, true)
         )
       )
-      [ @l_chomped_empty, n, t ]
+      @rgx(re_line_ending, true)
     )
 
 
 
-  # [174]
-  # c-l+folded(n) ::=
-  #   '>' c-b-block-header(m,t)
-  #   l-folded-content(n+m,t)
+  # [119]
+  # comment-content ::=
+  #   '#'
+  #   non-break-character*
 
-  c_l_folded: (n)->
-    @all(
-      @chr('>')
-      [ @c_b_block_header, n ]
-      [ @l_folded_content, @add(n, @m()), @t() ]
-    )
+  comment_content = ''
 
-
-
-  # [175]
-  # s-nb-folded-text(n) ::=
-  #   s-indent(n) ns-char
-  #   nb-char*
-
-  # XXX Can't eliminate this yet for some reason.
-  ns_char: ->
-    @rgx(re_ns_char)
-
-  s_nb_folded_text: (n)->
-    @all(
-      @rgx(s_indent_n(n))
-      @ns_char                          # XXX only used here
-      @rep(0, null, @rgx(re_nb_char))
-    )
-
-
-
-  # [176]
-  # l-nb-folded-lines(n) ::=
-  #   s-nb-folded-text(n)
-  #   ( b-l-folded(n,block-in) s-nb-folded-text(n) )*
-
-  l_nb_folded_lines: (n)->
-    @all(
-      [ @s_nb_folded_text, n ]
-      @rep(0, null,
-        @all(
-          [ @b_l_folded, n, "block-in" ]
-          [ @s_nb_folded_text, n ]
-        )
+  i119 = ->
+    [comment_content] = r ///
+      (?:
+        \x23
+        #{non_break_character}*
       )
+    ///u
+
+
+
+  # [120]
+  # empty-line(n,c) ::=
+  #   (
+  #       line-prefix-spaces(n,c)
+  #     | indentation-spaces-less-than(n)
+  #   )
+  #   break-as-line-feed
+
+  empty_line: (n, c)->
+    @all(
+      @any(
+        [ @line_prefix_spaces, n, c ]
+        [ @indentation_spaces_less_than, n ]
+      )
+      @rgx(re_break_as_line_feed)
     )
 
 
 
-  # [177]
-  # s-nb-spaced-text(n) ::=
-  #   s-indent(n) s-white
-  #   nb-char*
+  # [121]
+  # separation-characters(n,BLOCK-OUT) ::= separation-lines(n)
+  # separation-characters(n,BLOCK-IN)  ::= separation-lines(n)
+  # separation-characters(n,FLOW-OUT)  ::= separation-lines(n)
+  # separation-characters(n,FLOW-IN)   ::= separation-lines(n)
+  # separation-characters(n,BLOCK-KEY) ::= separation-blanks
+  # separation-characters(n,FLOW-KEY)  ::= separation-blanks
 
-  # XXX renaming this or eliminating it causes tests to fail. :\
-  s_white: ->
+  separation_characters: (n, c)->
+    @case c,
+      'block-in': [ @separation_lines, n ]
+      'block-key': @rgx(re_separation_lines)
+      'block-out': [ @separation_lines, n ]
+      'flow-in': [ @separation_lines, n ]
+      'flow-key': @rgx(re_separation_lines)
+      'flow-out': [ @separation_lines, n ]
+
+
+
+  # [122]
+  # separation-lines(n) ::=
+  #     (
+  #       comment-lines
+  #       indentation-spaces-plus-maybe-more(n)
+  #     )
+  #   | separation-blanks
+
+  [separation_lines, re_separation_lines] = []
+
+  i123 = ->
+    [separation_lines, re_separation_lines] = r ///
+      (?:
+        #{blank_character}+
+      | #{start_of_line}
+      )
+    ///
+
+  separation_lines: (n)->
+    @any(
+      @all(
+        @comment_lines
+        [ @indentation_spaces_plus_maybe_more, n ]
+      )
+      @rgx(re_separation_lines)
+    )
+
+
+
+  # [124]
+  # yaml-directive-line ::=
+  #   "YAML"
+  #   separation-blanks
+  #   yaml-version-number
+
+  yaml_directive_line: ->
+    @all(
+      @rgx(///
+        (?:
+          Y A M L
+          #{separation_lines}
+        )
+      ///y)
+      @yaml_version_number
+    )
+
+
+
+  # [125]
+  # yaml-version-number ::=
+  #   decimal-digit+
+  #   '.'
+  #   decimal-digit+
+
+  yaml_version_number: ->
     @rgx(///
-      [
-        #{s_space}
-        \t
-      ]
+      #{decimal_digit}+
+      \.
+      #{decimal_digit}+
     ///y)
 
-  s_nb_spaced_text: (n)->
+
+
+  # [126]
+  # reserved-directive-line ::=
+  #   directive-name
+  #   (
+  #     separation-blanks
+  #     directive-parameter
+  #   )*
+
+  reserved_directive_line: ->
+    @rgx(///
+      #{directive_name}
+      (?:
+        #{separation_lines}
+        #{directive_parameter}
+      )*
+    ///yu)
+
+
+
+  # [127]
+  # directive-name ::=
+  #   non-space-character+
+
+  directive_name = ''
+
+  i127 = ->
+    [directive_name] = r ///
+      #{non_space_character}+
+    ///u
+
+
+
+  # [128]
+  # directive-parameter ::=
+  #   non-space-character+
+
+  directive_parameter = ''
+
+  i128 = ->
+    [directive_parameter] = r ///
+      #{non_space_character}+
+    ///u
+
+
+
+  # [129]
+  # tag-directive-line ::=
+  #   "TAG"
+  #   separation-blanks
+  #   tag-handle
+  #   separation-blanks
+  #   tag-prefix
+
+  tag_directive_line: ->
     @all(
-      @rgx(s_indent_n(n))
-      @s_white                          # XXX only used here
-      @rep(0, null, @rgx(re_nb_char))
+      @rgx(///
+        T A G
+        #{separation_lines}
+      ///y)
+      @tag_handle
+      @rgx(re_separation_lines)
+      @tag_prefix
     )
 
 
 
-  # [178]
-  # b-l-spaced(n) ::=
-  #   b-as-line-feed
-  #   l-empty(n,block-in)*
+  # [130]
+  # tag-handle ::=
+  #     named-tag-handle
+  #   | secondary-tag-handle
+  #   | primary-tag-handle
 
-  b_l_spaced: (n)->
-    @all(
-      @rgx(re_b_as_line_feed)
-      @rep(0, null, [ @l_empty, n, "block-in" ])
-    )
+  [tag_handle, re_tag_handle] = []
+
+  i130 = ->
+    [tag_handle, re_tag_handle] = r ///
+      (?:
+        #{named_tag_handle}
+      | #{secondary_tag_handle}
+      | #{primary_tag_handle}
+      )
+    ///
+
+  tag_handle: ->
+    @rgx(re_tag_handle)
 
 
 
-  # [179]
-  # l-nb-spaced-lines(n) ::=
-  #   s-nb-spaced-text(n)
-  #   ( b-l-spaced(n) s-nb-spaced-text(n) )*
+  # [131]
+  # named-tag-handle ::=
+  #   '!'
+  #   word-character+
+  #   '!'
 
-  l_nb_spaced_lines: (n)->
-    @all(
-      [ @s_nb_spaced_text, n ]
-      @rep(0, null,
-        @all(
-          [ @b_l_spaced, n ]
-          [ @s_nb_spaced_text, n ]
+  named_tag_handle = ''
+
+  i131 = ->
+    [named_tag_handle] = r ///
+      !
+      #{word_character}+
+      !
+    ///
+
+
+
+  # [132]
+  # secondary-tag-handle ::=
+  #   "!!"
+
+  secondary_tag_handle = ''
+
+  i132 = ->
+    secondary_tag_handle = "!!"
+
+
+
+  # [133]
+  # primary-tag-handle ::=
+  #   '!'
+
+  primary_tag_handle = ''
+
+  i133 = ->
+    primary_tag_handle = "!"
+
+
+
+  # [134]
+  # tag-prefix ::=
+  #     local-tag-prefix
+  #   | global-tag-prefix
+
+  tag_prefix: ->
+    @rgx(///
+      (?:
+        #{local_tag_prefix}
+      | #{global_tag_prefix}
+      )
+    ///y)
+
+
+
+  # [135]
+  # local-tag-prefix ::=
+  #   '!'
+  #   uri-character*
+
+  local_tag_prefix = ''
+
+  i135 = ->
+    [local_tag_prefix] = r ///
+      !
+      #{uri_character}*
+    ///
+
+
+
+  # [136]
+  # global-tag-prefix ::=
+  #   tag-character
+  #   uri-character*
+
+  global_tag_prefix = ''
+
+  i136 = ->
+    [global_tag_prefix] = r ///
+      #{tag_char}
+      #{uri_character}*
+    ///
+
+
+
+  # [137]
+  # node-properties(n,c) ::=
+  #     (
+  #       anchor-property
+  #       (
+  #         separation-characters(n,c)
+  #         tag-property
+  #       )?
+  #     )
+  #   | (
+  #       tag-property
+  #       (
+  #         separation-characters(n,c)
+  #         anchor-property
+  #       )?
+  #     )
+
+  node_properties: (n, c)->
+    @any(
+      @all(
+        @tag_property
+        @rep(0, 1,
+          @all(
+            [ @separation_characters, n, c ]
+            @anchor_property
+          )
+        )
+      )
+      @all(
+        @anchor_property
+        @rep(0, 1,
+          @all(
+            [ @separation_characters, n, c ]
+            @tag_property
+          )
         )
       )
     )
 
 
 
-  # [180]
-  # l-nb-same-lines(n) ::=
-  #   l-empty(n,block-in)*
-  #   ( l-nb-folded-lines(n) | l-nb-spaced-lines(n) )
+  # [138]
+  # anchor-property ::=
+  #   '&'
+  #   anchor-name
 
-  l_nb_same_lines: (n)->
-    @all(
-      @rep(0, null, [ @l_empty, n, "block-in" ])
-      @any(
-        [ @l_nb_folded_lines, n ]
-        [ @l_nb_spaced_lines, n ]
-      )
-    )
+  anchor_property: ->
+    @rgx(///
+      &
+      #{anchor_name}
+    ///yu)
 
 
 
-  # [181]
-  # l-nb-diff-lines(n) ::=
-  #   l-nb-same-lines(n)
-  #   ( b-as-line-feed l-nb-same-lines(n) )*
+  # [139]
+  # anchor-name ::=
+  #   anchor-character+
 
-  l_nb_diff_lines: (n)->
-    @all(
-      [ @l_nb_same_lines, n ]
-      @rep(0, null,
-        @all(
-          @rgx(re_b_as_line_feed)
-          [ @l_nb_same_lines, n ]
+  anchor_name = ''
+
+  i139 = ->
+    [anchor_name] = r ///
+      (?:
+        #{anchor_character}
+      )+
+    ///u
+
+
+
+  # [140]
+  # anchor-character ::=
+  #     non-space-character
+  #   - flow-collection-indicators
+
+  anchor_character = ''
+
+  i140 = ->
+    [anchor_character] = r ///
+      (?:
+        (?!
+          #{flow_collection_indicator}
         )
+        #{non_space_character}
+      )+
+    ///u
+
+
+
+  # [141]
+  # tag-property ::=
+  #     verbatim-tag
+  #   | shorthand-tag
+  #   | non-specific-tag
+
+  tag_property: ->
+    @rgx(///
+      (?:
+        #{verbatim_tag}
+      | #{shorthand_tag}
+      | #{non_specific_tag}
       )
-    )
+    ///y)
 
 
 
-  # [182]
-  # l-folded-content(n,t) ::=
-  #   ( l-nb-diff-lines(n)
-  #   b-chomped-last(t) )?
-  #   l-chomped-empty(n,t)
+  # [142]
+  # verbatim-tag ::=
+  #   "!<"
+  #   uri-character+
+  #   '>'
 
-  l_folded_content: (n, t)->
-    @all(
-      @rep(0, 1,
-        @all(
-          [ @l_nb_diff_lines, n ]
-          [ @b_chomped_last, t ]
+  verbatim_tag = ''
+
+  i142 = ->
+    [verbatim_tag] = r ///
+        (?:
+          !
+          <
+            #{uri_character}+
+          >
         )
+    ///
+
+
+
+  # [143]
+  # shorthand-tag ::=
+  #   tag-handle
+  #   tag-character+
+
+  shorthand_tag = ''
+
+  i143 = ->
+    [shorthand_tag] = r ///
+      (
+        #{tag_handle}
+        #{tag_char}+
       )
-      [ @l_chomped_empty, n, t ]
+    ///
+
+
+
+  # [144]
+  # non-specific-tag ::=
+  #   '!'
+
+  non_specific_tag = "!"
+
+
+
+  # [145]
+  # byte-order-mark ::=
+  #   xFEFF
+
+  byte_order_mark = ''
+
+  i145 = ->
+    byte_order_mark = "\u{FEFF}"
+
+
+
+  # [146]
+  # yaml-character ::=
+  #                                     # 8 bit
+  #     x09                             # Tab
+  #   | x0A                             # Line feed
+  #   | x0D                             # Carriage return
+  #   | [x20-x7E]                       # Printable ASCII
+  #                                     # 16 bit
+  #   | x85                             # Next line (NEL)
+  #   | [xA0-xD7FF]                     # Basic multilingual plane (BMP)
+  #   | [xE000-xFFFD]                   # Additional unicode areas
+  #   | [x010000-x10FFFF]               # 32 bit
+
+  yaml_character = ''
+
+  i146 = ->
+    [yaml_character] = r ///
+      [
+        \x09
+        \x0A
+        \x0D
+        \x20-\x7E
+        \x85
+        \xA0-\uD7FF
+        \uE000-\uFFFD
+        \u{10000}-\u{10FFFF}
+      ]
+    ///u
+
+
+
+  # [147]
+  # json-character ::=
+  #     x09                             # Tab
+  #   | [x20-x10FFFF]                   # Non-C0-control characters
+
+  json_character = ''
+
+  i147 = ->
+    [json_character] = r ///
+      [
+        \x09
+        \x20-\u{10FFFF}
+      ]
+    ///u
+
+
+
+  # [148]
+  # non-space-character ::=
+  #     non-break-character
+  #   - blank-character
+
+  [non_space_character, re_non_space_character] = []
+
+  i148 = ->
+    [non_space_character, re_non_space_character] = r ///
+      (?:
+        (?!
+          #{blank_character}
+        )
+        #{non_break_character}
+      )
+    ///u
+
+
+
+  # [149]
+  # non-break-character ::=
+  #     yaml-character
+  #   - x0A
+  #   - x0D
+  #   - byte-order-mark
+
+  [non_break_character, re_non_break_character] = []
+
+  i149 = ->
+    [non_break_character, re_non_break_character] = r ///
+      (?:
+        (?!
+          [
+            \x0A
+            \x0D
+            #{byte_order_mark}
+          ]
+        )
+        #{yaml_character}
+      )
+    ///u
+
+
+
+  # [150]
+  # blank-character ::=
+  #     x20                             # Space
+  #   | x09                             # Tab
+
+  [blank_character, ws_lookahead] = []
+
+  i150 = ->
+    [blank_character] = r ///
+      [
+        #{space_character}
+        \t
+      ]
+    ///
+
+    [ws_lookahead] = r ///
+      (?=
+        #{end_of_file}
+      | #{blank_character}
+      | #{line_break}
+      )
+    ///
+
+
+
+  # [151]
+  # space-character ::=
+  #   x20
+
+  space_character = ''
+
+  i151 = ->
+    space_character = "\x20"
+
+
+
+  # [152]
+  # line-ending ::=
+  #     line-break
+  #   | <end-of-input>
+
+  [line_ending, re_line_ending] = []
+
+  i152 = ->
+    [line_ending, re_line_ending] = r ///
+      (?:
+        #{line_break}
+      | #{end_of_file}
+      )
+    ///
+
+
+
+  # [153]
+  # break-as-space ::=
+  #   line-break
+
+  re_break_as_space = ''
+
+  i153 = ->
+    re_break_as_space = re_line_break
+
+
+
+  # [154]
+  # break-as-line-feed ::=
+  #   line-break
+
+  re_break_as_line_feed = ''
+
+  i154 = ->
+    re_break_as_line_feed = re_line_break
+
+
+
+  # [155]
+  # line-break ::=
+  #     (
+  #       x0D                           # Carriage return
+  #       x0A                           # Line feed
+  #     )
+  #   | x0D
+  #   | x0A
+
+  [line_break, re_line_break] = []
+
+  i155 = ->
+    [line_break, re_line_break] = r ///
+      (?:
+        (?:
+          \x0D
+          \x0A
+        )
+      | \x0D
+      | \x0A
+      )
+    ///
+
+
+
+  # XXX Rename to flow-collection-indicator
+  # [156]
+  # flow-collection-indicators ::=
+  #     '{'                             # Flow mapping start
+  #   | '}'                             # Flow mapping end
+  #   | '['                             # Flow sequence start
+  #   | ']'                             # Flow sequence end
+
+  # [156] 023
+  # c-flow-indicator ::=
+  #   ',' | '[' | ']' | '{' | '}'
+
+  [flow_collection_indicator, flow_collection_indicator_s] = []
+
+  i156 = ->
+    [flow_collection_indicator, , flow_collection_indicator_s] = r ///
+      [
+        ,
+        [
+        \]
+        {
+        }
+      ]
+    ///
+
+
+
+  # [157]
+  # double-quoted-scalar-escape-character ::=
+  #   '\'
+  #   (
+  #       '0'
+  #     | 'a'
+  #     | 'b'
+  #     | 't' | x09
+  #     | 'n'
+  #     | 'v'
+  #     | 'f'
+  #     | 'r'
+  #     | 'e'
+  #     | x20
+  #     | '"'
+  #     | '/'
+  #     | '\'
+  #     | 'N'
+  #     | '_'
+  #     | 'L'
+  #     | 'P'
+  #     | ( 'x' hexadecimal-digit{2} )
+  #     | ( 'u' hexadecimal-digit{4} )
+  #     | ( 'U' hexadecimal-digit{8} )
+  #   )
+
+  double_quoted_scalar_escape_character = ''
+
+  i157 = ->
+    [double_quoted_scalar_escape_character] = r ///
+      \\
+      (?:
+        [
+          0
+          a
+          b
+          t
+          \t
+          n
+          v
+          f
+          r
+          e
+          \x20
+          "
+          /
+          \\
+          N
+          _
+          L
+          P
+        ]
+      | x #{hexadecimal_digit}{2}
+      | u #{hexadecimal_digit}{4}
+      | U #{hexadecimal_digit}{8}
+      )
+    ///
+
+
+
+  # [158]
+  # tag-character ::=
+  #     uri-character
+  #   - '!'
+  #   - flow-collection-indicators
+
+  tag_char = ''
+
+  i158 = ->
+    [tag_char] = r ///
+      (?:
+        (?!
+          [
+            !
+            #{flow_collection_indicator_s}
+          ]
+        )
+        #{uri_character}
+      )
+    ///
+
+
+
+  # [159]
+  # uri-character ::=
+  #     (
+  #       '%'
+  #       hexadecimal-digit{2}
+  #     )
+  #   | word-character
+  #   | '#'
+  #   | ';'
+  #   | '/'
+  #   | '?'
+  #   | ':'
+  #   | '@'
+  #   | '&'
+  #   | '='
+  #   | '+'
+  #   | '$'
+  #   | ','
+  #   | '_'
+  #   | '.'
+  #   | '!'
+  #   | '~'
+  #   | '*'
+  #   | "'"
+  #   | '('
+  #   | ')'
+  #   | '['
+  #   | ']'
+
+  uri_character = ''
+
+  i159 = ->
+    [uri_character] = r ///
+      (?:
+        % #{hexadecimal_digit}{2}
+      | [
+          #{word_character_s}
+          \x23
+          ;
+          /
+          ?
+          :
+          @
+          &
+          =
+          +
+          $
+          ,
+          _
+          .
+          !
+          ~
+          *
+          '
+          (
+          )
+          [
+          \]
+        ]
+      )
+    ///
+
+
+
+  # [160]
+  # word-character ::=
+  #     decimal-digit
+  #   | ascii-alpha-character
+  #   | '-'
+
+  [word_character, , word_character_s] = []
+
+  i160 = ->
+    [word_character, , word_character_s] = r ///
+      [
+        #{decimal_digit_s}
+        #{ascii_alpha_character_s}
+        \-
+      ]
+    ///
+
+
+
+  # [161]
+  # hexadecimal-digit ::=
+  #     decimal-digit
+  #   | [x41-x46]                       # A-F
+  #   | [x61-x66]                       # a-f
+
+  hexadecimal_digit = ''
+
+  i161 = ->
+    [hexadecimal_digit] = r ///
+      [
+        #{decimal_digit_s}
+        A - F
+        a - f
+      ]
+    ///
+
+
+
+  # [162]
+  # decimal-digit ::=
+  #   [x30-x39]                         # 0-9
+
+  [decimal_digit, decimal_digit_s] = []
+
+  i162 = ->
+    [decimal_digit, , decimal_digit_s] = r ///
+      [
+        0 - 9
+      ]
+    ///
+
+
+
+  # [163]
+  # decimal-digit-1-9 ::=
+  #   [x31-x39]                         # 0-9
+
+  re_decimal_digit_1_9 = ''
+
+  i163 = ->
+    [re_decimal_digit_1_9] = r ///
+      [
+        0 - 9
+      ]
+    ///
+
+
+
+  # [164]
+  # ascii-alpha-character ::=
+  #     [x41-x5A]                       # A-Z
+  #   | [x61-x7A]                       # a-z
+
+  ascii_alpha_character_s = ''
+
+  i164 = ->
+    [, , ascii_alpha_character_s] = r ///
+      [
+        A - Z
+        a - z
+      ]
+    ///
+
+#------------------------------------------------------------------------------
+
+
+  # XXX Not sure if this can be replaced by s_b_comment:
+
+  # [x078]
+  # l-comment ::=
+  #   s-separate-in-line c-nb-comment-text?
+  #   b-comment
+
+  l_comment: ->
+    @all(
+      @rgx(re_separation_lines)
+      @rgx(///
+        #{comment_content}*
+        #{line_ending}
+      ///yu)
     )
 
-  func() for func in init
+
+
+  # Call the variable initialization functions in the order needed for
+  # JavaScript to be correct.
+  init() for init in [
+    i146
+    i147
+    i145
+    i156
+    i155
+    i154
+    i162
+    i163
+    i151
+    i150
+    i149
+    i148
+    i161
+    i164
+    i160
+    i159
+    i158
+    i157
+    i153
+    i152
+    i123
+    i133
+    i132
+    i131
+    i130
+    i135
+    i136
+    i142
+    i143
+    i140
+    i139
+    i128
+    i127
+    i119
+    i051
+    i096
+    i095
+    i094
+    i091
+    i092
+    i093
+    i084
+    i083
+    i081
+    i080
+    i004
+  ]

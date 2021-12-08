@@ -195,22 +195,6 @@ global.Parser = class Parser extends Grammar
       @pos = pos_start
       return false
     name_ 'rep', rep, "rep(#{min},#{max})"
-  rep2: (min, max, func)->
-    rep2 = ->
-      return false if max? and max < 0
-      count = 0
-      pos = @pos
-      pos_start = pos
-      while not(max?) or count < max
-        break unless @call func
-        break if @pos == pos
-        count++
-        pos = @pos
-      if count >= min and (not(max?) or count <= max)
-        return true
-      @pos = pos_start
-      return false
-    name_ 'rep2', rep2, "rep2(#{min},#{max})"
 
   # Call a rule depending on state value:
   case: (var_, map)->
@@ -359,12 +343,14 @@ global.Parser = class Parser extends Grammar
       str = @call str, 'string' unless isString str
       return str.charCodeAt(0) - 48
 
-  if: (test, do_if_true)->
+  if: (test, do_if_true, do_if_false)->
     if_ = ->
       test = @call test, 'boolean' unless isBoolean test
       if test
         @call do_if_true
         return true
+      # if do_if_false?
+      #   @call do_if_false
       return false
     name_ 'if', if_
 
@@ -447,22 +433,22 @@ global.Parser = class Parser extends Grammar
     small = [
       'b_as_line_feed',
       's_indent',
-      'nb_char',
+      'non_break_character',
     ]
 
     noisy = [
       'document_start_indicator',
-      'c_l_folded',
-      'c_l_literal',
+      'block_folded_scalar',
+      'block_literal_scalar',
       'c_ns_alias_node',
       'c_ns_anchor_property',
       'c_ns_tag_property',
       'directives_and_document',
       'document_prefix',
-      'ns_flow_content',
+      'flow_content',
       'ns_plain',
-      's_l_comments',
-      's_separate',
+      'comment_lines',
+      'separation_characters',
     ]
     return ((ENV.TRACE_QUIET || '').split ',')
       .concat(noisy)

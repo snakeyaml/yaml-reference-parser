@@ -181,18 +181,18 @@
       return this.add(stream_end_event());
     }
 
-    got__ns_yaml_version(o) {
+    got__yaml_version_number(o) {
       if (this.document_start.version != null) {
         die("Multiple %YAML directives not allowed");
       }
       return this.document_start.version = o.text;
     }
 
-    got__c_tag_handle(o) {
+    got__tag_handle(o) {
       return this.tag_handle = o.text;
     }
 
-    got__ns_tag_prefix(o) {
+    got__tag_prefix(o) {
       return this.tag_map[this.tag_handle] = o.text;
     }
 
@@ -208,19 +208,19 @@
       return this.check_document_end();
     }
 
-    got__c_flow_mapping__all__x7b() {
+    got__flow_mapping__all__x7b() {
       return this.add(mapping_start_event(true));
     }
 
-    got__c_flow_mapping__all__x7d() {
+    got__flow_mapping__all__x7d() {
       return this.add(mapping_end_event());
     }
 
-    got__c_flow_sequence__all__x5b() {
+    got__flow_sequence__all__x5b() {
       return this.add(sequence_start_event(true));
     }
 
-    got__c_flow_sequence__all__x5d() {
+    got__flow_sequence__all__x5d() {
       return this.add(sequence_end_event());
     }
 
@@ -275,15 +275,15 @@
       return this.cache_drop();
     }
 
-    try__ns_flow_pair() {
+    try__flow_pair() {
       return this.cache_up(mapping_start_event(true));
     }
 
-    got__ns_flow_pair() {
+    got__flow_pair() {
       return this.cache_down(mapping_end_event());
     }
 
-    not__ns_flow_pair() {
+    not__flow_pair() {
       return this.cache_drop();
     }
 
@@ -311,19 +311,19 @@
       return this.cache_drop();
     }
 
-    try__c_ns_flow_map_empty_key_entry() {
+    try__flow_mapping_empty_key_entry() {
       return this.cache_up();
     }
 
-    got__c_ns_flow_map_empty_key_entry() {
+    got__flow_mapping_empty_key_entry() {
       return this.cache_down();
     }
 
-    not__c_ns_flow_map_empty_key_entry() {
+    not__flow_mapping_empty_key_entry() {
       return this.cache_drop();
     }
 
-    got__ns_plain(o) {
+    got__flow_plain_scalar(o) {
       var text;
       text = o.text.replace(/(?:[\ \t]*\r?\n[\ \t]*)/g, "\n").replace(/(\n)(\n*)/g, function(...m) {
         if (m[2].length) {
@@ -335,7 +335,7 @@
       return this.add(scalar_event('plain', text));
     }
 
-    got__c_single_quoted(o) {
+    got__single_quoted_scalar(o) {
       var text;
       text = o.text.slice(1, -1).replace(/(?:[\ \t]*\r?\n[\ \t]*)/g, "\n").replace(/(\n)(\n*)/g, function(...m) {
         if (m[2].length) {
@@ -347,7 +347,7 @@
       return this.add(scalar_event('single', text));
     }
 
-    got__c_double_quoted(o) {
+    got__double_quoted_scalar(o) {
       var text;
       text = o.text.slice(1, -1).replace(/(?<!\\)(?:[\ \t]*\r?\n[\ \t]*)/g, "\n").replace(/\\\n[\ \t]*/g, '').replace(/(\n)(\n*)/g, function(...m) {
         if (m[2].length) {
@@ -365,22 +365,22 @@
       return this.add(scalar_event('double', text));
     }
 
-    got__l_empty() {
+    got__empty_line() {
       if (this.in_scalar) {
         return this.add(cache(''));
       }
     }
 
-    got__l_nb_literal_text__all__rep2(o) {
+    got__literal_scalar_line_content__all__all(o) {
       return this.add(cache(o.text));
     }
 
-    try__c_l_literal() {
+    try__block_literal_scalar() {
       this.in_scalar = true;
       return this.cache_up();
     }
 
-    got__c_l_literal() {
+    got__block_literal_scalar() {
       var lines, t, text;
       delete this.in_scalar;
       lines = this.cache_drop();
@@ -400,38 +400,25 @@
       return this.add(scalar_event('literal', text));
     }
 
-    not__c_l_literal() {
+    not__block_literal_scalar() {
       delete this.in_scalar;
       return this.cache_drop();
     }
 
-    got__ns_char(o) {
-      if (this.in_scalar) {
-        return this.first = o.text;
-      }
+    got__folded_scalar_text__all__all__rgx(o) {
+      return this.add(cache(o.text));
     }
 
-    got__s_white(o) {
-      if (this.in_scalar) {
-        return this.first = o.text;
-      }
+    got__folded_scalar_spaced_text__all__all(o) {
+      return this.add(cache(o.text));
     }
 
-    got__s_nb_folded_text__all__rep(o) {
-      return this.add(cache(`${this.first}${o.text}`));
-    }
-
-    got__s_nb_spaced_text__all__rep(o) {
-      return this.add(cache(`${this.first}${o.text}`));
-    }
-
-    try__c_l_folded() {
+    try__block_folded_scalar() {
       this.in_scalar = true;
-      this.first = '';
       return this.cache_up();
     }
 
-    got__c_l_folded() {
+    got__block_folded_scalar() {
       var lines, t, text;
       delete this.in_scalar;
       lines = this.cache_drop().map(function(l) {
@@ -454,12 +441,12 @@
       return this.add(scalar_event('folded', text));
     }
 
-    not__c_l_folded() {
+    not__block_folded_scalar() {
       delete this.in_scalar;
       return this.cache_drop();
     }
 
-    got__e_node() {
+    got__empty_node() {
       return this.add(scalar_event('plain', ''));
     }
 
@@ -468,11 +455,11 @@
       return delete this.anchor;
     }
 
-    got__c_ns_anchor_property(o) {
+    got__anchor_property(o) {
       return this.anchor = o.text.slice(1);
     }
 
-    got__c_ns_tag_property(o) {
+    got__tag_property(o) {
       var m, prefix, tag;
       tag = o.text;
       if (m = tag.match(/^!<(.*)>$/)) {
@@ -501,7 +488,7 @@
       });
     }
 
-    got__c_ns_alias_node(o) {
+    got__alias_node(o) {
       return this.add(alias_event(o.text.slice(1)));
     }
 

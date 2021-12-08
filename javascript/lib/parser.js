@@ -261,35 +261,6 @@
       return name_('rep', rep, `rep(${min},${max})`);
     }
 
-    rep2(min, max, func) {
-      var rep2;
-      rep2 = function() {
-        var count, pos, pos_start;
-        if ((max != null) && max < 0) {
-          return false;
-        }
-        count = 0;
-        pos = this.pos;
-        pos_start = pos;
-        while (!(max != null) || count < max) {
-          if (!this.call(func)) {
-            break;
-          }
-          if (this.pos === pos) {
-            break;
-          }
-          count++;
-          pos = this.pos;
-        }
-        if (count >= min && (!(max != null) || count <= max)) {
-          return true;
-        }
-        this.pos = pos_start;
-        return false;
-      };
-      return name_('rep2', rep2, `rep2(${min},${max})`);
-    }
-
     // Call a rule depending on state value:
     case(var_, map) {
       var case_;
@@ -522,7 +493,7 @@
       };
     }
 
-    if(test, do_if_true) {
+    if(test, do_if_true, do_if_false) {
       var if_;
       if_ = function() {
         if (!isBoolean(test)) {
@@ -532,6 +503,8 @@
           this.call(do_if_true);
           return true;
         }
+        // if do_if_false?
+        //   @call do_if_false
         return false;
       };
       return name_('if', if_);
@@ -643,8 +616,8 @@
       if (DEBUG) {
         return [];
       }
-      small = ['b_as_line_feed', 's_indent', 'nb_char'];
-      noisy = ['document_start_indicator', 'c_l_folded', 'c_l_literal', 'c_ns_alias_node', 'c_ns_anchor_property', 'c_ns_tag_property', 'directives_and_document', 'document_prefix', 'ns_flow_content', 'ns_plain', 's_l_comments', 's_separate'];
+      small = ['b_as_line_feed', 's_indent', 'non_break_character'];
+      noisy = ['document_start_indicator', 'block_folded_scalar', 'block_literal_scalar', 'c_ns_alias_node', 'c_ns_anchor_property', 'c_ns_tag_property', 'directives_and_document', 'document_prefix', 'flow_content', 'ns_plain', 'comment_lines', 'separation_characters'];
       return ((ENV.TRACE_QUIET || '').split(',')).concat(noisy);
     }
 

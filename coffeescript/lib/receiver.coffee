@@ -106,14 +106,14 @@ global.Receiver = class Receiver
     @check_document_end()
     @add stream_end_event()
 
-  got__ns_yaml_version: (o)->
+  got__yaml_version_number: (o)->
     die "Multiple %YAML directives not allowed" \
       if @document_start.version?
     @document_start.version = o.text
 
-  got__c_tag_handle: (o)->
+  got__tag_handle: (o)->
     @tag_handle = o.text
-  got__ns_tag_prefix: (o)->
+  got__tag_prefix: (o)->
     @tag_map[@tag_handle] = o.text
 
   got__document_start_indicator: ->
@@ -124,11 +124,11 @@ global.Receiver = class Receiver
       @document_end.explicit = true
     @check_document_end()
 
-  got__c_flow_mapping__all__x7b: -> @add mapping_start_event true
-  got__c_flow_mapping__all__x7d: -> @add mapping_end_event()
+  got__flow_mapping__all__x7b: -> @add mapping_start_event true
+  got__flow_mapping__all__x7d: -> @add mapping_end_event()
 
-  got__c_flow_sequence__all__x5b: -> @add sequence_start_event true
-  got__c_flow_sequence__all__x5d: -> @add sequence_end_event()
+  got__flow_sequence__all__x5b: -> @add sequence_start_event true
+  got__flow_sequence__all__x5d: -> @add sequence_end_event()
 
   try__block_mapping: -> @cache_up mapping_start_event()
   got__block_mapping: -> @cache_down mapping_end_event()
@@ -149,9 +149,9 @@ global.Receiver = class Receiver
   got__compact_sequence: -> @cache_down sequence_end_event()
   not__compact_sequence: -> @cache_drop()
 
-  try__ns_flow_pair: -> @cache_up mapping_start_event true
-  got__ns_flow_pair: -> @cache_down mapping_end_event()
-  not__ns_flow_pair: -> @cache_drop()
+  try__flow_pair: -> @cache_up mapping_start_event true
+  got__flow_pair: -> @cache_down mapping_end_event()
+  not__flow_pair: -> @cache_drop()
 
   try__block_mapping_implicit_entry: -> @cache_up()
   got__block_mapping_implicit_entry: -> @cache_down()
@@ -161,24 +161,24 @@ global.Receiver = class Receiver
   got__block_mapping_explicit_entry: -> @cache_down()
   not__block_mapping_explicit_entry: -> @cache_drop()
 
-  try__c_ns_flow_map_empty_key_entry: -> @cache_up()
-  got__c_ns_flow_map_empty_key_entry: -> @cache_down()
-  not__c_ns_flow_map_empty_key_entry: -> @cache_drop()
+  try__flow_mapping_empty_key_entry: -> @cache_up()
+  got__flow_mapping_empty_key_entry: -> @cache_down()
+  not__flow_mapping_empty_key_entry: -> @cache_drop()
 
-  got__ns_plain: (o)->
+  got__flow_plain_scalar: (o)->
     text = o.text
       .replace(/(?:[\ \t]*\r?\n[\ \t]*)/g, "\n")
       .replace(/(\n)(\n*)/g, (m...)-> if m[2].length then m[2] else ' ')
     @add scalar_event 'plain', text
 
-  got__c_single_quoted: (o)->
+  got__single_quoted_scalar: (o)->
     text = o.text[1...-1]
       .replace(/(?:[\ \t]*\r?\n[\ \t]*)/g, "\n")
       .replace(/(\n)(\n*)/g, (m...)-> if m[2].length then m[2] else ' ')
       .replace(/''/g, "'")
     @add scalar_event 'single', text
 
-  got__c_double_quoted: (o)->
+  got__double_quoted_scalar: (o)->
     text = o.text[1...-1]
       .replace(/(?<!\\)(?:[\ \t]*\r?\n[\ \t]*)/g, "\n")
       .replace(/\\\n[\ \t]*/g, '')
@@ -200,14 +200,14 @@ global.Receiver = class Receiver
 
     @add scalar_event 'double', text
 
-  got__l_empty: ->
+  got__empty_line: ->
     @add cache('') if @in_scalar
-  got__l_nb_literal_text__all__rep2: (o)->
+  got__literal_scalar_line_content__all__all: (o)->
     @add cache(o.text)
-  try__c_l_literal: ->
+  try__block_literal_scalar: ->
     @in_scalar = true
     @cache_up()
-  got__c_l_literal: ->
+  got__block_literal_scalar: ->
     delete @in_scalar
     lines = @cache_drop()
     lines.pop() if lines.length > 0 and lines[lines.length - 1].text == ''
@@ -219,23 +219,18 @@ global.Receiver = class Receiver
     else if t == 'strip'
       text = text.replace /\n+$/, ""
     @add scalar_event 'literal', text
-  not__c_l_literal: ->
+  not__block_literal_scalar: ->
     delete @in_scalar
     @cache_drop()
 
-  got__ns_char: (o)->
-    @first = o.text if @in_scalar
-  got__s_white: (o)->
-    @first = o.text if @in_scalar
-  got__s_nb_folded_text__all__rep: (o)->
-    @add cache "#{@first}#{o.text}"
-  got__s_nb_spaced_text__all__rep: (o)->
-    @add cache "#{@first}#{o.text}"
-  try__c_l_folded: ->
+  got__folded_scalar_text__all__all__rgx: (o)->
+    @add cache o.text
+  got__folded_scalar_spaced_text__all__all: (o)->
+    @add cache o.text
+  try__block_folded_scalar: ->
     @in_scalar = true
-    @first = ''
     @cache_up()
-  got__c_l_folded: ->
+  got__block_folded_scalar: ->
     delete @in_scalar
     lines = @cache_drop().map (l)-> l.text
     text = lines.join "\n"
@@ -251,20 +246,20 @@ global.Receiver = class Receiver
     else if t == 'strip'
       text = text.replace /\n+$/, ""
     @add scalar_event 'folded', text
-  not__c_l_folded: ->
+  not__block_folded_scalar: ->
     delete @in_scalar
     @cache_drop()
 
-  got__e_node: -> @add scalar_event 'plain', ''
+  got__empty_node: -> @add scalar_event 'plain', ''
 
   not__block_collection__all__rep__all__any__all: ->
     delete @tag
     delete @anchor
 
-  got__c_ns_anchor_property: (o)->
+  got__anchor_property: (o)->
     @anchor = o.text[1..]
 
-  got__c_ns_tag_property: (o)->
+  got__tag_property: (o)->
     tag = o.text
     if m = tag.match /^!<(.*)>$/
       @tag = m[1]
@@ -287,6 +282,6 @@ global.Receiver = class Receiver
     @tag = @tag.replace /%([0-9a-fA-F]{2})/g, (m...)->
       String.fromCharCode parseInt m[1], 16
 
-  got__c_ns_alias_node: (o)-> @add alias_event o.text[1..]
+  got__alias_node: (o)-> @add alias_event o.text[1..]
 
 # vim: sw=2:

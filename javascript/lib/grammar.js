@@ -3,7 +3,7 @@
   var Grammar;
 
   global.Grammar = Grammar = (function() {
-    var b_break, b_char, b_char_s, b_comment, b_non_content, c_byte_order_mark, c_flow_indicator, c_flow_indicator_s, c_indicator, c_named_tag_handle, c_nb_comment_text, c_non_specific_tag, c_ns_esc_char, c_ns_local_tag_prefix, c_ns_shorthand_tag, c_primary_tag_handle, c_printable, c_quoted_quote, c_secondary_tag_handle, c_tag_handle, c_verbatim_tag, document_end_indicator, document_start_indicator, end_of_file, func, i, init, len, nb_char, nb_double_char, nb_json, nb_ns_single_in_line, nb_single_char, ns_anchor_char, ns_anchor_name, ns_ascii_letter_s, ns_char, ns_dec_digit, ns_dec_digit_s, ns_directive_name, ns_directive_parameter, ns_double_char, ns_global_tag_prefix, ns_hex_digit, ns_single_char, ns_tag_char, ns_uri_char, ns_word_char, ns_word_char_s, r, re_b_as_line_feed, re_b_as_space, re_b_break, re_b_char, re_b_comment, re_b_non_content, re_c_tag_handle, re_document_end_indicator, re_document_start_indicator, re_l_trail_comments, re_nb_char, re_nb_double_one_line, re_nb_ns_double_in_line, re_nb_ns_single_in_line, re_nb_single_one_line, re_ns_char, re_ns_double_char, re_ns_plain_safe_in, re_ns_plain_safe_out, re_ns_reserved_directive, re_s_indent, re_s_separate_in_line, re_s_single_next_line, s_indent_n, s_separate_in_line, s_space, s_white, start_of_line, ws_lookahead;
+    var anchor_character, anchor_name, ascii_alpha_character_s, blank_character, byte_order_mark, comment_content, decimal_digit, decimal_digit_s, directive_name, directive_parameter, document_end_indicator, document_start_indicator, double_quoted_one_line, double_quoted_scalar_escape_character, end_of_file, flow_collection_indicator, flow_collection_indicator_s, global_tag_prefix, hexadecimal_digit, i, i004, i051, i080, i081, i083, i084, i091, i092, i093, i094, i095, i096, i119, i123, i127, i128, i130, i131, i132, i133, i135, i136, i139, i140, i142, i143, i145, i146, i147, i148, i149, i150, i151, i152, i153, i154, i155, i156, i157, i158, i159, i160, i161, i162, i163, i164, init, json_character, len, line_break, line_ending, local_tag_prefix, named_tag_handle, non_break_character, non_break_double_quoted_character, non_break_single_quoted_character, non_space_character, non_space_double_quoted_character, non_space_single_quoted_character, non_specific_tag, primary_tag_handle, r, re_break_as_line_feed, re_break_as_space, re_decimal_digit_1_9, re_document_end_indicator, re_document_start_indicator, re_double_quoted_first_line, re_line_break, re_line_ending, re_line_trail_comments, re_non_break_character, re_non_space_character, re_non_space_double_quoted_character, re_separation_lines, re_single_quoted_first_line, re_single_quoted_next_line, re_single_quoted_one_line, re_tag_handle, ref, secondary_tag_handle, separation_lines, shorthand_tag, single_quoted_escaped_single_quote, single_quoted_first_line, space_character, start_of_line, tag_char, tag_handle, uri_character, verbatim_tag, word_character, word_character_s, ws_lookahead, yaml_character;
 
     class Grammar {
       // Grammar rules:
@@ -26,7 +26,7 @@
       //     | start-indicator-and-document
       //   )*
       yaml_stream() {
-        return this.all(this.document_prefix, this.rep(0, 1, this.any_document), this.rep2(0, null, this.any(this.all(this.document_suffix, this.rep(0, null, this.document_prefix), this.rep2(0, 1, this.any_document)), this.all(this.document_prefix, this.rep(0, 1, this.start_indicator_and_document)))));
+        return this.all(this.document_prefix, this.rep(0, 1, this.any_document), this.rep(0, null, this.any(this.all(this.document_suffix, this.rep(0, null, this.document_prefix), this.rep(0, 1, this.any_document)), this.all(this.document_prefix, this.rep(0, 1, this.start_indicator_and_document)))));
       }
 
       // [002]
@@ -34,7 +34,7 @@
       //   byte-order-mark?
       //   comment-line*
       document_prefix() {
-        return this.all(this.rep(0, 1, this.chr(c_byte_order_mark)), this.rep2(0, null, this.l_comment));
+        return this.all(this.rep(0, 1, this.chr(byte_order_mark)), this.rep(0, null, this.l_comment));
       }
 
       // [003]
@@ -42,7 +42,7 @@
       //   document-end-indicator
       //   comment-lines
       document_suffix() {
-        return this.all(this.document_end_indicator, this.s_l_comments);
+        return this.all(this.document_end_indicator, this.comment_lines);
       }
 
       document_start_indicator() {
@@ -81,7 +81,7 @@
       //       )
       //   )
       start_indicator_and_document() {
-        return this.all(this.document_start_indicator, this.any(this.bare_document, this.all(this.e_node, this.s_l_comments)));
+        return this.all(this.document_start_indicator, this.any(this.bare_document, this.all(this.empty_node, this.comment_lines)));
       }
 
       // [009]
@@ -102,7 +102,7 @@
       //   )
       //   comment-lines
       directive_line() {
-        return this.all(this.chr('%'), this.any(this.ns_yaml_directive, this.ns_tag_directive, this.rgx(re_ns_reserved_directive)), this.s_l_comments);
+        return this.all(this.chr('%'), this.any(this.yaml_directive_line, this.tag_directive_line, this.reserved_directive_line), this.comment_lines);
       }
 
       // [011]
@@ -117,7 +117,8 @@
       //     | blank-character
       //   )
       forbidden_content() {
-        return this.rgx(RegExp(`(?:${start_of_line}(?:${document_start_indicator}|${document_end_indicator})(?:${b_char}|${s_white}|${end_of_file}))`, "y"));
+        return this.rgx(RegExp(`(?:${start_of_line // XXX slightly different than 1.3 spec
+}(?:${document_start_indicator}|${document_end_indicator})(?:[\\x0A\\x0D]|${blank_character}|${end_of_file}))`, "y"));
       }
 
       // [012]
@@ -142,7 +143,7 @@
       //   flow-node(n+1,FLOW-OUT)
       //   comment-lines
       flow_node_in_a_block_node(n) {
-        return this.all([this.s_separate, n + 1, "flow-out"], [this.ns_flow_node, n + 1, "flow-out"], this.s_l_comments);
+        return this.all([this.separation_characters, n + 1, "flow-out"], [this.flow_node, n + 1, "flow-out"], this.comment_lines);
       }
 
       // [015]
@@ -157,9 +158,8 @@
       //     | block-mapping(n)
       //   )
       block_collection(n, c) {
-        // XXX replace with `node-properties`
-        // [ @block_sequence_context, [ @seq_spaces, n, c ] ]
-        return this.all(this.rep(0, 1, this.all([this.s_separate, n + 1, c], this.any(this.all([this.c_ns_properties, n + 1, c], this.s_l_comments), this.all(this.c_ns_tag_property, this.s_l_comments), this.all(this.c_ns_anchor_property, this.s_l_comments)))), this.s_l_comments, this.any([this.block_sequence_context, n, c], [this.block_mapping, n]));
+        // XXX Needed by receiver to get only a tag or anchor:
+        return this.all(this.rep(0, 1, this.all([this.separation_characters, n + 1, c], this.any(this.all([this.node_properties, n + 1, c], this.comment_lines), this.all(this.tag_property, this.comment_lines), this.all(this.anchor_property, this.comment_lines)))), this.comment_lines, this.any([this.block_sequence_context, n, c], [this.block_mapping, n]));
       }
 
       // [016]
@@ -184,7 +184,7 @@
       //     | block-folded-scalar(n)
       //   )
       block_scalar(n, c) {
-        return this.all([this.s_separate, n + 1, c], this.rep(0, 1, this.all([this.c_ns_properties, n + 1, c], [this.s_separate, n + 1, c])), this.any([this.c_l_literal, n], [this.c_l_folded, n]));
+        return this.all([this.separation_characters, n + 1, c], this.rep(0, 1, this.all([this.node_properties, n + 1, c], [this.separation_characters, n + 1, c])), this.any([this.block_literal_scalar, n], [this.block_folded_scalar, n]));
       }
 
       // [018]
@@ -198,7 +198,7 @@
         if (!(m = this.call([this.auto_detect_indent, n], 'number'))) {
           return false;
         }
-        return this.all(this.rep(1, null, this.all(this.rgx(s_indent_n(n + m)), [this.block_mapping_entry, n + m])));
+        return this.all(this.rep(1, null, this.all(this.indentation_spaces_n(n + m), [this.block_mapping_entry, n + m])));
       }
 
       // [019]
@@ -217,7 +217,7 @@
       //     | empty-node
       //   )
       block_mapping_explicit_entry(n) {
-        return this.all([this.block_mapping_explicit_key, n], this.any([this.block_mapping_explicit_value, n], this.e_node));
+        return this.all([this.block_mapping_explicit_key, n], this.any([this.block_mapping_explicit_value, n], this.empty_node));
       }
 
       // [021]
@@ -234,7 +234,7 @@
       //   ':'                               # Not followed by non-ws char
       //   block-indented-node(n,BLOCK-OUT)
       block_mapping_explicit_value(n) {
-        return this.all(this.rgx(s_indent_n(n)), this.rgx(RegExp(`:${ws_lookahead}`, "y")), [this.block_indented_node, n, "block-out"]);
+        return this.all(this.indentation_spaces_n(n), this.rgx(RegExp(`:${ws_lookahead}`, "y")), [this.block_indented_node, n, "block-out"]);
       }
 
       // [023]
@@ -245,7 +245,7 @@
       //   )
       //   block-mapping-implicit-value(n)
       block_mapping_implicit_entry(n) {
-        return this.all(this.any(this.block_mapping_implicit_key, this.e_node), [this.block_mapping_implicit_value, n]);
+        return this.all(this.any(this.block_mapping_implicit_key, this.empty_node), [this.block_mapping_implicit_value, n]);
       }
 
       // XXX Can fold into 023
@@ -254,7 +254,7 @@
       //     implicit-json-key(BLOCK-KEY)
       //   | implicit-yaml-key(BLOCK-KEY)
       block_mapping_implicit_key() {
-        return this.any([this.c_s_implicit_json_key, "block-key"], [this.ns_s_implicit_yaml_key, "block-key"]);
+        return this.any([this.implicit_json_key, "block-key"], [this.implicit_yaml_key, "block-key"]);
       }
 
       // [025]
@@ -268,7 +268,7 @@
       //       )
       //   )
       block_mapping_implicit_value(n) {
-        return this.all(this.rgx(RegExp(`:${ws_lookahead}`, "y")), this.any([this.block_node, n, "block-out"], this.all(this.e_node, this.s_l_comments)));
+        return this.all(this.rgx(RegExp(`:${ws_lookahead}`, "y")), this.any([this.block_node, n, "block-out"], this.all(this.empty_node, this.comment_lines)));
       }
 
       // [026]
@@ -279,7 +279,7 @@
       //     block-mapping-entry(n)
       //   )*
       compact_mapping(n) {
-        return this.all([this.block_mapping_entry, n], this.rep(0, null, this.all(this.rgx(s_indent_n(n)), [this.block_mapping_entry, n])));
+        return this.all([this.block_mapping_entry, n], this.rep(0, null, this.all(this.indentation_spaces_n(n), [this.block_mapping_entry, n])));
       }
 
       // [027]
@@ -293,7 +293,7 @@
         if (!(m = this.call([this.auto_detect_indent, n], 'number'))) {
           return false;
         }
-        return this.all(this.rep(1, null, this.all(this.rgx(s_indent_n(n + m)), [this.c_l_block_seq_entry, n + m])));
+        return this.all(this.rep(1, null, this.all(this.indentation_spaces_n(n + m), [this.block_sequence_entry, n + m])));
       }
 
       // [028]
@@ -301,8 +301,8 @@
       //   '-'
       //   [ lookahead ≠ non-space-character ]
       //   block-indented-node(n,BLOCK-IN)
-      c_l_block_seq_entry(n) {
-        return this.all(this.rgx(RegExp(`-${ws_lookahead}`, "y")), this.chk('!', this.rgx(re_ns_char)), [this.block_indented_node, n, "block-in"]);
+      block_sequence_entry(n) {
+        return this.all(this.rgx(RegExp(`-${ws_lookahead}(?!${non_space_character})`, "yu")), [this.block_indented_node, n, "block-in"]);
       }
 
       // [029]
@@ -322,7 +322,7 @@
       block_indented_node(n, c) {
         var m;
         m = this.call([this.auto_detect_indent, n], 'number');
-        return this.any(this.all(this.rgx(s_indent_n(m)), this.any([this.compact_sequence, n + 1 + m], [this.compact_mapping, n + 1 + m])), [this.block_node, n, c], this.all(this.e_node, this.s_l_comments));
+        return this.any(this.all(this.indentation_spaces_n(m), this.any([this.compact_sequence, n + 1 + m], [this.compact_mapping, n + 1 + m])), [this.block_node, n, c], this.all(this.empty_node, this.comment_lines));
       }
 
       // [030]
@@ -333,800 +333,1021 @@
       //     block-sequence-entry(n)
       //   )*
       compact_sequence(n) {
-        return this.all([this.c_l_block_seq_entry, n], this.rep(0, null, this.all(this.rgx(s_indent_n(n)), [this.c_l_block_seq_entry, n])));
+        return this.all([this.block_sequence_entry, n], this.rep(0, null, this.all(this.indentation_spaces_n(n), [this.block_sequence_entry, n])));
       }
 
-      // [064]
-      // s-indent(<n) ::=
-      //   s-space{m} <where_m_<_n>
-      s_indent_lt(n) {
-        return this.all(this.rgx(re_s_indent), this.lt(this.len(this.match), n));
+      // [031]
+      // block-literal-scalar(n) ::=
+      //   '|'
+      //   block-scalar-indicators(t)
+      //   literal-scalar-content(n+m,t)
+      block_literal_scalar(n) {
+        return this.all(this.chr('|'), [this.block_scalar_indicator, n], [this.literal_scalar_content, this.add(n, this.m()), this.t()]);
       }
 
-      // [065]
-      // s-indent(<=n) ::=
-      //   s-space{m} <where_m_<=_n>
-      s_indent_le(n) {
-        return this.all(this.rgx(re_s_indent), this.le(this.len(this.match), n));
+      // [032]
+      // literal-scalar-content(n,t) ::=
+      //   (
+      //     literal-scalar-line-content(n)
+      //     literal-scalar-next-line(n)*
+      //     block-scalar-chomp-last(t)
+      //   )?
+      //   block-scalar-chomp-empty(n,t)
+      literal_scalar_content(n, t) {
+        return this.all(this.rep(0, 1, this.all([this.literal_scalar_line_content, n], this.rep(0, null, [this.literal_scalar_next_line, n]), [this.block_scalar_chomp_last, t])), [this.block_scalar_chomp_empty, n, t]);
       }
 
-      // [067]
-      // s-line-prefix(n,c) ::=
-      //   ( c = block-out => s-block-line-prefix(n) )
-      //   ( c = block-in => s-block-line-prefix(n) )
-      //   ( c = flow-out => s-flow-line-prefix(n) )
-      //   ( c = flow-in => s-flow-line-prefix(n) )
-      s_line_prefix(n, c) {
-        return this.case(c, {
-          'block-in': [this.s_block_line_prefix, n],
-          'block-out': [this.s_block_line_prefix, n],
-          'flow-in': [this.s_flow_line_prefix, n],
-          'flow-out': [this.s_flow_line_prefix, n]
+      // [033]
+      // literal-scalar-line-content(n) ::=
+      //   empty-line(n,BLOCK-IN)*
+      //   indentation-spaces(n)
+      //   non-break-character+
+      literal_scalar_line_content(n) {
+        // XXX @all used to disambiguate @rgx capture:
+        return this.all(this.rep(0, null, [this.empty_line, n, "block-in"]), this.indentation_spaces_n(n), this.all(this.rgx(RegExp(`${non_break_character}+`, "yu"))));
+      }
+
+      // [034]
+      // literal-scalar-next-line(n) ::=
+      //   break-as-line-feed
+      //   literal-scalar-line-content(n)
+      literal_scalar_next_line(n) {
+        return this.all(this.rgx(re_break_as_line_feed), [this.literal_scalar_line_content, n]);
+      }
+
+      // [035]
+      // block-folded-scalar(n) ::=
+      //   '>'
+      //   block-scalar-indicators(t)
+      //   folded-scalar-content(n+m,t)
+      block_folded_scalar(n) {
+        return this.all(this.chr('>'), [this.block_scalar_indicator, n], [this.folded_scalar_content, this.add(n, this.m()), this.t()]);
+      }
+
+      // [036]
+      // folded-scalar-content(n,t) ::=
+      //   (
+      //     folded-scalar-lines-different-indentation(n)
+      //     block-scalar-chomp-last(t)
+      //   )?
+      //   block-scalar-chomp-empty(n,t)
+      folded_scalar_content(n, t) {
+        return this.all(this.rep(0, 1, this.all([this.folded_scalar_lines_different_indentation, n], [this.block_scalar_chomp_last, t])), [this.block_scalar_chomp_empty, n, t]);
+      }
+
+      // [037]
+      // folded-scalar-lines-different-indentation(n) ::=
+      //   folded-scalar-lines-same-indentation(n)
+      //   (
+      //     break-as-line-feed
+      //     folded-scalar-lines-same-indentation(n)
+      //   )*
+      folded_scalar_lines_different_indentation(n) {
+        return this.all([this.folded_scalar_lines_same_indentation, n], this.rep(0, null, this.all(this.rgx(re_break_as_line_feed), [this.folded_scalar_lines_same_indentation, n])));
+      }
+
+      // [038]
+      // folded-scalar-lines-same-indentation(n) ::=
+      //   empty-line(n,BLOCK-IN)*
+      //   (
+      //       folded-scalar-lines(n)
+      //     | folded-scalar-spaced-lines(n)
+      //   )
+      folded_scalar_lines_same_indentation(n) {
+        return this.all(this.rep(0, null, [this.empty_line, n, "block-in"]), this.any([this.folded_scalar_lines, n], [this.folded_scalar_spaced_lines, n]));
+      }
+
+      // [039]
+      // folded-scalar-lines(n) ::=
+      //   folded-scalar-text(n)
+      //   (
+      //     folded-whitespace(n,BLOCK-IN)
+      //     folded-scalar-text(n)
+      //   )*
+      folded_scalar_lines(n) {
+        return this.all([this.folded_scalar_text, n], this.rep(0, null, this.all([this.folded_whitespace, n, "block-in"], [this.folded_scalar_text, n])));
+      }
+
+      // [040]
+      // folded-scalar-spaced-lines(n) ::=
+      //   folded-scalar-spaced-text(n)
+      //   (
+      //     line-break-and-empty-lines(n)
+      //     folded-scalar-spaced-text(n)
+      //   )*
+      folded_scalar_spaced_lines(n) {
+        return this.all([this.folded_scalar_spaced_text, n], this.rep(0, null, this.all([this.line_break_and_empty_lines, n], [this.folded_scalar_spaced_text, n])));
+      }
+
+      // [041]
+      // folded-scalar-text(n) ::=
+      //   indentation-spaces(n)
+      //   non-space-character
+      //   non-break-character*
+      folded_scalar_text(n) {
+        // XXX @all used to disambiguate @rgx capture:
+        return this.all(this.indentation_spaces_n(n), this.all(this.rgx(RegExp(`${non_space_character}+${non_break_character}*`, "yu"))));
+      }
+
+      // [042]
+      // line-break-and-empty-lines(n) ::=
+      //   break-as-line-feed
+      //   empty-line(n,BLOCK-IN)*
+      line_break_and_empty_lines(n) {
+        return this.all(this.rgx(re_break_as_line_feed), this.rep(0, null, [this.empty_line, n, "block-in"]));
+      }
+
+      // [043]
+      // folded-scalar-spaced-text(n) ::=
+      //   indentation-spaces(n)
+      //   blank-character
+      //   non-break-character*
+      folded_scalar_spaced_text(n) {
+        return this.all(this.indentation_spaces_n(n), this.all(this.rgx(RegExp(`${blank_character}${non_break_character}*`, "yu"))));
+      }
+
+      // [044]
+      // block-scalar-indicators(t) ::=
+      //   (
+      //       (
+      //         block-scalar-indentation-indicator
+      //         block-scalar-chomping-indicator(t)
+      //       )
+      //     | (
+      //         block-scalar-chomping-indicator(t)
+      //         block-scalar-indentation-indicator
+      //       )
+      //   )
+      //   (
+      //       comment-line
+      //     | line-ending
+      //   )
+      block_scalar_indicator(n) {
+        return this.all(this.any(this.all([this.block_scalar_indentation_indicator, n], this.block_scalar_chomping_indicator, this.rgx(ws_lookahead)), this.all(this.block_scalar_chomping_indicator, [this.block_scalar_indentation_indicator, n], this.rgx(ws_lookahead))), this.comment_line);
+      }
+
+      // [045]
+      // block-scalar-indentation-indicator ::=
+      //   decimal-digit-1-9
+      block_scalar_indentation_indicator(n) {
+        return this.any(this.if(this.rgx(re_decimal_digit_1_9), this.set('m', this.ord(this.match))), this.if(this.empty, this.set('m', [this.auto_detect, n])));
+      }
+
+      // [046]
+      // block-scalar-chomping-indicator(STRIP) ::= '-'
+      // block-scalar-chomping-indicator(KEEP)  ::= '+'
+      // block-scalar-chomping-indicator(CLIP)  ::= ""
+      block_scalar_chomping_indicator() {
+        return this.any(this.if(this.chr('-'), this.set('t', "strip")), this.if(this.chr('+'), this.set('t', "keep")), this.if(this.empty, this.set('t', "clip")));
+      }
+
+      // [047]
+      // block-scalar-chomp-last(STRIP) ::= line-break | <end-of-input>
+      // block-scalar-chomp-last(CLIP)  ::= break-as-line-feed | <end-of-input>
+      // block-scalar-chomp-last(KEEP)  ::= break-as-line-feed | <end-of-input>
+      block_scalar_chomp_last(t) {
+        return this.case(t, {
+          'clip': this.any(this.rgx(re_break_as_line_feed), this.end_of_stream),
+          'keep': this.any(this.rgx(re_break_as_line_feed), this.end_of_stream),
+          'strip': this.any(this.rgx(re_line_break), this.end_of_stream)
         });
       }
 
-      // XXX Can be removed
-      // [068]
-      // s-block-line-prefix(n) ::=
-      //   s-indent(n)
-      s_block_line_prefix(n) {
-        return this.rgx(s_indent_n(n));
+      //   [048]
+      //   block-scalar-chomp-empty(n,STRIP) ::= line-strip-empty(n)
+      //   block-scalar-chomp-empty(n,CLIP)  ::= line-strip-empty(n)
+      //   block-scalar-chomp-empty(n,KEEP)  ::= line-keep-empty(n)
+      block_scalar_chomp_empty(n, t) {
+        return this.case(t, {
+          'strip': [this.line_strip_empty, n],
+          'clip': [this.line_strip_empty, n],
+          'keep': [this.line_keep_empty, n]
+        });
       }
 
-      // [069]
-      // s-flow-line-prefix(n) ::=
-      //   s-indent(n)
-      //   s-separate-in-line?
-      s_flow_line_prefix(n) {
-        return this.all(this.rgx(s_indent_n(n)), this.rep(0, 1, this.rgx(re_s_separate_in_line)));
+      // [049]
+      // line-strip-empty(n) ::=
+      //   (
+      //     indentation-spaces-less-or-equal(n)
+      //     line-break
+      //   )*
+      //   line-trail-comments(n)?
+      line_strip_empty(n) {
+        return this.all(this.rep(0, null, this.all([this.indentation_spaces_less_or_equal, n], this.rgx(re_line_break))), this.rep(0, 1, [this.line_trail_comments, n]));
       }
 
-      // [070]
-      // l-empty(n,c) ::=
-      //   ( s-line-prefix(n,c) | s-indent(<n) )
-      //   b-as-line-feed
-      l_empty(n, c) {
-        return this.all(this.any([this.s_line_prefix, n, c], [this.s_indent_lt, n]), this.rgx(re_b_as_line_feed));
+      // [050]
+      // line-keep-empty(n) ::=
+      //   empty-line(n,BLOCK-IN)*
+      //   line-trail-comments(n)?
+      line_keep_empty(n) {
+        return this.all(this.rep(0, null, [this.empty_line, n, "block-in"]), this.rep(0, 1, [this.line_trail_comments, n]));
       }
 
-      // [073]
-      // b-l-folded(n,c) ::=
-      //   b-l-trimmed(n,c) | b-as-space
-      b_l_folded(n, c) {
-        return this.any(this.all(this.rgx(re_b_non_content), this.rep(1, null, [this.l_empty, n, c])), this.rgx(re_b_as_space));
+      line_trail_comments(n) {
+        return this.all([this.indentation_spaces_less_than, n], this.rgx(re_line_trail_comments), this.rep(0, null, this.l_comment));
+      }
+
+      // [052]
+      // flow-node(n,c) ::=
+      //     alias-node
+      //   | flow-content(n,c)
+      //   | (
+      //       node-properties(n,c)
+      //       (
+      //         (
+      //           separation-characters(n,c)
+      //           flow-content(n,c)
+      //         )
+      //         | empty-node
+      //       )
+      //     )
+      flow_node(n, c) {
+        return this.any(this.alias_node, [this.flow_content, n, c], this.all([this.node_properties, n, c], this.any(this.all([this.separation_characters, n, c], [this.flow_content, n, c]), this.empty_node)));
+      }
+
+      // [053]
+      // flow-content(n,c) ::=
+      //     flow-yaml-content(n,c)
+      //   | flow-json-content(n,c)
+      flow_content(n, c) {
+        return this.any([this.flow_yaml_content, n, c], [this.flow_json_content, n, c]);
+      }
+
+      // [054]
+      // flow-yaml-content(n,c) ::=
+      //   flow-plain-scalar(n,c)
+      flow_yaml_content(n, c) {
+        return [this.flow_plain_scalar, n, c];
+      }
+
+      // [055]
+      // flow-json-content(n,c) ::=
+      //     flow-sequence(n,c)
+      //   | flow-mapping(n,c)
+      //   | single-quoted-scalar(n,c)
+      //   | double-quoted-scalar(n,c)
+      flow_json_content(n, c) {
+        return this.any([this.flow_sequence, n, c], [this.flow_mapping, n, c], [this.single_quoted_scalar, n, c], [this.double_quoted_scalar, n, c]);
+      }
+
+      // [056]
+      // flow-mapping(n,c) ::=
+      //   '{'
+      //   separation-characters(n,c)?
+      //   flow-mapping-context(n,c)?
+      //   '}'
+      flow_mapping(n, c) {
+        return this.all(this.chr('{'), this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, [this.flow_mapping_context, n, c]), this.chr('}'));
+      }
+
+      // [057]
+      // flow-mapping-entries(n,c) ::=
+      //   flow-mapping-entry(n,c)
+      //   separation-characters(n,c)?
+      //   (
+      //     ','
+      //     separation-characters(n,c)?
+      //     flow-mapping-entries(n,c)?
+      //   )?
+      flow_mapping_entries(n, c) {
+        return this.all([this.flow_mapping_entry, n, c], this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, this.all(this.chr(','), this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, [this.flow_mapping_entries, n, c]))));
+      }
+
+      // [058]
+      // flow-mapping-entry(n,c) ::=
+      //     (
+      //       '?'                           # Not followed by non-ws char
+      //       separation-characters(n,c)
+      //       flow-mapping-explicit-entry(n,c)
+      //     )
+      //   | flow-mapping-implicit-entry(n,c)
+      flow_mapping_entry(n, c) {
+        return this.any(this.all(this.rgx(RegExp(`\\?${ws_lookahead}`, "y")), [this.separation_characters, n, c], [this.flow_mapping_explicit_entry, n, c]), [this.flow_mapping_implicit_entry, n, c]);
+      }
+
+      // [59]
+      // flow-mapping-explicit-entry(n,c) ::=
+      //     flow-mapping-implicit-entry(n,c)
+      //   | (
+      //       empty-node
+      //       empty-node
+      //     )
+      flow_mapping_explicit_entry(n, c) {
+        return this.any([this.flow_mapping_implicit_entry, n, c], this.all(this.empty_node, this.empty_node));
+      }
+
+      // [60]
+      // flow-mapping-implicit-entry(n,c) ::=
+      //     flow-mapping-yaml-key-entry(n,c)
+      //   | flow-mapping-empty-key-entry(n,c)
+      //   | flow-mapping-json-key-entry(n,c)
+      flow_mapping_implicit_entry(n, c) {
+        return this.any([this.flow_mapping_yaml_key_entry, n, c], [this.flow_mapping_empty_key_entry, n, c], [this.flow_mapping_json_key_entry, n, c]);
+      }
+
+      // [61]
+      // flow-mapping-yaml-key-entry(n,c) ::=
+      //   flow-yaml-node(n,c)
+      //   (
+      //       (
+      //         separation-characters(n,c)?
+      //         flow-mapping-separate-value(n,c)
+      //       )
+      //     | empty-node
+      //   )
+      flow_mapping_yaml_key_entry(n, c) {
+        return this.all([this.flow_yaml_node, n, c], this.any(this.all(this.rep(0, 1, [this.separation_characters, n, c]), [this.flow_mapping_separate_value, n, c]), this.empty_node));
+      }
+
+      // [62]
+      // flow-mapping-empty-key-entry(n,c) ::=
+      //   empty-node
+      //   flow-mapping-separate-value(n,c)
+      flow_mapping_empty_key_entry(n, c) {
+        return this.all(this.empty_node, [this.flow_mapping_separate_value, n, c]);
+      }
+
+      // [63]
+      // flow-mapping-separate-value(n,c) ::=
+      //   ':'
+      //   [ lookahead ≠ non-space-plain-scalar-character(c) ]
+      //   (
+      //       (
+      //         separation-characters(n,c)
+      //         flow-node(n,c)
+      //       )
+      //     | empty-node
+      //   )
+      flow_mapping_separate_value(n, c) {
+        return this.all(this.chr(':'), this.chk('!', [this.non_space_plain_scalar_character, c]), this.any(this.all([this.separation_characters, n, c], [this.flow_node, n, c]), this.empty_node));
+      }
+
+      // [64]
+      // flow-mapping-json-key-entry(n,c) ::=
+      //   flow-json-node(n,c)
+      //   (
+      //       (
+      //         separation-characters(n,c)?
+      //         flow-mapping-adjacent-value(n,c)
+      //       )
+      //     | empty-node
+      //   )
+      flow_mapping_json_key_entry(n, c) {
+        return this.all([this.flow_json_node, n, c], this.any(this.all(this.rep(0, 1, [this.separation_characters, n, c]), [this.flow_mapping_adjacent_value, n, c]), this.empty_node));
+      }
+
+      // [65]
+      // flow-mapping-adjacent-value(n,c) ::=
+      //   ':'
+      //   (
+      //       (
+      //         separation-characters(n,c)?
+      //         flow-node(n,c)
+      //       )
+      //     | empty-node
+      //   )
+      flow_mapping_adjacent_value(n, c) {
+        return this.all(this.chr(':'), this.any(this.all(this.rep(0, 1, [this.separation_characters, n, c]), [this.flow_node, n, c]), this.empty_node));
+      }
+
+      // [66]
+      // flow-pair(n,c) ::=
+      //     (
+      //       '?'                           # Not followed by non-ws char
+      //       separation-characters(n,c)
+      //       flow-mapping-explicit-entry(n,c)
+      //     )
+      //   | flow-pair-entry(n,c)
+      flow_pair(n, c) {
+        return this.any(this.all(this.rgx(RegExp(`\\?${ws_lookahead}`)), [this.separation_characters, n, c], [this.flow_mapping_explicit_entry, n, c]), [this.flow_pair_entry, n, c]);
+      }
+
+      // [67]
+      // flow-pair-entry(n,c) ::=
+      //     flow-pair-yaml-key-entry(n,c)
+      //   | flow-mapping-empty-key-entry(n,c)
+      //   | flow-pair-json-key-entry(n,c)
+      flow_pair_entry(n, c) {
+        return this.any([this.flow_pair_yaml_key_entry, n, c], [this.flow_mapping_empty_key_entry, n, c], [this.flow_pair_json_key_entry, n, c]);
+      }
+
+      // [68]
+      // flow-pair-yaml-key-entry(n,c) ::=
+      //   implicit-yaml-key(FLOW-KEY)
+      //   flow-mapping-separate-value(n,c)
+      flow_pair_yaml_key_entry(n, c) {
+        return this.all([this.implicit_yaml_key, "flow-key"], [this.flow_mapping_separate_value, n, c]);
+      }
+
+      // [69]
+      // flow-pair-json-key-entry(n,c) ::=
+      //   implicit-json-key(FLOW-KEY)
+      //   flow-mapping-adjacent-value(n,c)
+      flow_pair_json_key_entry(n, c) {
+        return this.all([this.implicit_json_key, "flow-key"], [this.flow_mapping_adjacent_value, n, c]);
+      }
+
+      // [70]
+      // implicit-yaml-key(c) ::=
+      //   flow-yaml-node(0,c)
+      //   separation-blanks?
+      //   /* At most 1024 characters altogether */
+      implicit_yaml_key(c) {
+        return this.all(this.max(1024), [this.flow_yaml_node, null, c], this.rep(0, 1, this.rgx(re_separation_lines)));
+      }
+
+      // [71]
+      // implicit-json-key(c) ::=
+      //   flow-json-node(0,c)
+      //   separation-blanks?
+      //   /* At most 1024 characters altogether */
+      implicit_json_key(c) {
+        return this.all(this.max(1024), [this.flow_json_node, null, c], this.rep(0, 1, this.rgx(re_separation_lines)));
+      }
+
+      // [72]
+      // flow-yaml-node(n,c) ::=
+      //     alias-node
+      //   | flow-yaml-content(n,c)
+      //   | (
+      //       node-properties(n,c)
+      //       (
+      //           (
+      //             separation-characters(n,c)
+      //             flow-yaml-content(n,c)
+      //           )
+      //         | empty-node
+      //       )
+      //     )
+      flow_yaml_node(n, c) {
+        return this.any(this.alias_node, [this.flow_yaml_content, n, c], this.all([this.node_properties, n, c], this.any(this.all([this.separation_characters, n, c], [this.flow_content, n, c]), this.empty_node)));
+      }
+
+      // [73]
+      // flow-json-node(n,c) ::=
+      //   (
+      //     node-properties(n,c)
+      //     separation-characters(n,c)
+      //   )?
+      //   flow-json-content(n,c)
+      flow_json_node(n, c) {
+        return this.all(this.rep(0, 1, this.all([this.node_properties, n, c], [this.separation_characters, n, c])), [this.flow_json_content, n, c]);
       }
 
       // [074]
-      // s-flow-folded(n) ::=
-      //   s-separate-in-line?
-      //   b-l-folded(n,flow-in)
-      //   s-flow-line-prefix(n)
-      s_flow_folded(n) {
-        return this.all(this.rep(0, 1, this.rgx(re_s_separate_in_line)), [this.b_l_folded, n, "flow-in"], [this.s_flow_line_prefix, n]);
+      // flow-sequence(n,c) ::=
+      //   '['
+      //   separation-characters(n,c)?
+      //   flow-sequence-context(n,c)?
+      //   ']'
+      flow_sequence(n, c) {
+        return this.all(this.chr('['), this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, [this.flow_sequence_context, n, c]), this.chr(']'));
       }
 
-      // [077]
-      // s-b-comment ::=
-      //   ( s-separate-in-line
-      //   c-nb-comment-text? )?
-      //   b-comment
-      s_b_comment() {
-        return this.all(this.rep(0, 1, this.all(this.rgx(re_s_separate_in_line), this.rgx(RegExp(`${c_nb_comment_text}?`, "yu"), true))), this.rgx(re_b_comment, true));
+      // [075]
+      // flow-sequence-entries(n,c) ::=
+      //   flow-sequence-entry(n,c)
+      //   separation-characters(n,c)?
+      //   (
+      //     ','
+      //     separation-characters(n,c)?
+      //     flow-sequence-entries(n,c)?
+      //   )?
+      flow_sequence_entries(n, c) {
+        return this.all([this.flow_sequence_entry, n, c], this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, this.all(this.chr(','), this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, [this.flow_sequence_entries, n, c]))));
       }
 
-      // [078]
-      // l-comment ::=
-      //   s-separate-in-line c-nb-comment-text?
-      //   b-comment
-      l_comment() {
-        return this.all(this.rgx(re_s_separate_in_line), this.rgx(RegExp(`${c_nb_comment_text}*${b_comment}`, "yu")));
+      // [76]
+      // flow-sequence-entry(n,c) ::=
+      //     flow-pair(n,c)
+      //   | flow-node(n,c)
+      flow_sequence_entry(n, c) {
+        return this.any([this.flow_pair, n, c], [this.flow_node, n, c]);
       }
 
-      // [079]
-      // s-l-comments ::=
-      //   ( s-b-comment | <start_of_line> )
-      //   l-comment*
-      s_l_comments() {
-        return this.all(this.any(this.s_b_comment, this.start_of_line), this.rep(0, null, this.l_comment));
+      // [77]
+      // double-quoted-scalar(n,c) ::=
+      //   '"'
+      //   double-quoted-text(n,c)
+      //   '"'
+      double_quoted_scalar(n, c) {
+        return this.all(this.chr('"'), [this.double_quoted_text, n, c], this.chr('"'));
       }
 
-      // [080]
-      // s-separate(n,c) ::=
-      //   ( c = block-out => s-separate-lines(n) )
-      //   ( c = block-in => s-separate-lines(n) )
-      //   ( c = flow-out => s-separate-lines(n) )
-      //   ( c = flow-in => s-separate-lines(n) )
-      //   ( c = block-key => s-separate-in-line )
-      //   ( c = flow-key => s-separate-in-line )
-      s_separate(n, c) {
+      // [78]
+      // double-quoted-text(n,BLOCK-KEY) ::= double-quoted-one-line
+      // double-quoted-text(n,FLOW-KEY)  ::= double-quoted-one-line
+      // double-quoted-text(n,FLOW-OUT)  ::= double-quoted-multi-line(n)
+      // double-quoted-text(n,FLOW-IN)   ::= double-quoted-multi-line(n)
+      double_quoted_text(n, c) {
         return this.case(c, {
-          'block-in': [this.s_separate_lines, n],
-          'block-key': this.rgx(re_s_separate_in_line),
-          'block-out': [this.s_separate_lines, n],
-          'flow-in': [this.s_separate_lines, n],
-          'flow-key': this.rgx(re_s_separate_in_line),
-          'flow-out': [this.s_separate_lines, n]
+          'block-key': this.rgx(double_quoted_one_line),
+          'flow-in': [this.double_quoted_multi_line, n],
+          'flow-key': this.rgx(double_quoted_one_line),
+          'flow-out': [this.double_quoted_multi_line, n]
         });
       }
 
-      // [081]
-      // s-separate-lines(n) ::=
-      //   ( s-l-comments
-      //   s-flow-line-prefix(n) )
-      //   | s-separate-in-line
-      s_separate_lines(n) {
-        return this.any(this.all(this.s_l_comments, [this.s_flow_line_prefix, n]), this.rgx(re_s_separate_in_line));
+      // [79]
+      // double-quoted-multi-line(n) ::=
+      //   double-quoted-first-line
+      //   (
+      //       double-quoted-next-line(n)
+      //     | blank-character*
+      //   )
+      double_quoted_multi_line(n) {
+        return this.all(this.rgx(re_double_quoted_first_line), this.any([this.double_quoted_next_line, n], this.rgx(`${blank_character}*`)));
       }
 
-      // [086]
-      // ns-yaml-directive ::=
-      //   'Y' 'A' 'M' 'L'
-      //   s-separate-in-line ns-yaml-version
-      ns_yaml_directive() {
-        return this.all(this.rgx(RegExp(`(?:YAML${s_separate_in_line})`, "y")), this.ns_yaml_version);
+      // [82]
+      // double-quoted-next-line(n) ::=
+      //   (
+      //       double-quoted-line-continuation(n)
+      //     | flow-folded-whitespace(n)
+      //   )
+      //   (
+      //     non-space-double-quoted-character
+      //     double-quoted-first-line
+      //     (
+      //         double-quoted-next-line(n)
+      //       | blank-character*
+      //     )
+      //   )?
+      double_quoted_next_line(n) {
+        return this.all(this.any([this.double_quoted_line_continuation, n], [this.flow_folded_whitespace, n]), this.rep(0, 1, this.all(this.rgx(re_non_space_double_quoted_character), this.rgx(re_double_quoted_first_line), this.any([this.double_quoted_next_line, n], this.rgx(`${blank_character}*`)))));
+      }
+
+      // [85]
+      // double-quoted-line-continuation(n) ::=
+      //   blank-character*
+      //   '\'
+      //   line-break
+      //   empty-line(n,FLOW-IN)*
+      //   indentation-spaces-plus-maybe-more(n)
+      double_quoted_line_continuation(n) {
+        return this.all(this.rgx(RegExp(`${blank_character}*\\\\${line_break}`, "y")), this.rep(0, null, [this.empty_line, n, "flow-in"]), [this.indentation_spaces_plus_maybe_more, n]);
+      }
+
+      // [086]  # XXX fix typo in 1.3.0 spec
+      // flow-mapping-context(n,FLOW-OUT)  ::= flow-sequence-entries(n,FLOW-IN)
+      // flow-mapping-context(n,FLOW-IN)   ::= flow-sequence-entries(n,FLOW-IN)
+      // flow-mapping-context(n,BLOCK-KEY) ::= flow-sequence-entries(n,FLOW-KEY)
+      // flow-mapping-context(n,FLOW-KEY)  ::= flow-sequence-entries(n,FLOW-KEY)
+      flow_mapping_context(n, c) {
+        return this.case(c, {
+          'flow-out': [this.flow_mapping_entries, n, "flow-in"],
+          'flow-in': [this.flow_mapping_entries, n, "flow-in"],
+          'block-key': [this.flow_mapping_entries, n, "flow-key"],
+          'flow-key': [this.flow_mapping_entries, n, "flow-key"]
+        });
       }
 
       // [087]
-      // ns-yaml-version ::=
-      //   ns-dec-digit+ '.' ns-dec-digit+
-      ns_yaml_version() {
-        return this.rgx(RegExp(`${ns_dec_digit}+\\.${ns_dec_digit}+`, "y"));
+      // flow-sequence-context(n,FLOW-OUT)  ::= flow-sequence-entries(n,FLOW-IN)
+      // flow-sequence-context(n,FLOW-IN)   ::= flow-sequence-entries(n,FLOW-IN)
+      // flow-sequence-context(n,BLOCK-KEY) ::= flow-sequence-entries(n,FLOW-KEY)
+      // flow-sequence-context(n,FLOW-KEY)  ::= flow-sequence-entries(n,FLOW-KEY)
+      flow_sequence_context(n, c) {
+        return this.case(c, {
+          'flow-out': [this.flow_sequence_entries, n, "flow-in"],
+          'flow-in': [this.flow_sequence_entries, n, "flow-in"],
+          'block-key': [this.flow_sequence_entries, n, "flow-key"],
+          'flow-key': [this.flow_sequence_entries, n, "flow-key"]
+        });
       }
 
-      // [088]
-      // ns-tag-directive ::=
-      //   'T' 'A' 'G'
-      //   s-separate-in-line c-tag-handle
-      //   s-separate-in-line ns-tag-prefix
-      ns_tag_directive() {
-        return this.all(this.rgx(RegExp(`TAG${s_separate_in_line}`, "y")), this.c_tag_handle, this.rgx(re_s_separate_in_line), this.ns_tag_prefix);
+      // [88]
+      // single-quoted-scalar(n,c) ::=
+      //   "'"
+      //   single-quoted-text(n,c)
+      //   "'"
+      single_quoted_scalar(n, c) {
+        return this.all(this.chr("'"), [this.single_quoted_text, n, c], this.chr("'"));
       }
 
-      c_tag_handle() {
-        return this.rgx(re_c_tag_handle);
+      // [89]
+      // single-quoted-text(BLOCK-KEY) ::= single-quoted-one-line
+      // single-quoted-text(FLOW-KEY)  ::= single-quoted-one-line
+      // single-quoted-text(FLOW-OUT)  ::= single-quoted-multi-line(n)
+      // single-quoted-text(FLOW-IN)   ::= single-quoted-multi-line(n)
+      single_quoted_text(n, c) {
+        return this.case(c, {
+          'block-key': this.rgx(re_single_quoted_one_line),
+          'flow-in': [this.single_quoted_multi_line, n],
+          'flow-key': this.rgx(re_single_quoted_one_line),
+          'flow-out': [this.single_quoted_multi_line, n]
+        });
       }
 
-      // [093]
-      // ns-tag-prefix ::=
-      //   c-ns-local-tag-prefix | ns-global-tag-prefix
-      ns_tag_prefix() {
-        return this.rgx(RegExp(`(?:${c_ns_local_tag_prefix}|${ns_global_tag_prefix})`, "y"));
+      // [90]
+      // single-quoted-multi-line(n) ::=
+      //   single-quoted-first-line
+      //   (
+      //       single-quoted-next-line(n)
+      //     | blank-character*
+      //   )
+      single_quoted_multi_line(n) {
+        return this.all(this.rgx(re_single_quoted_first_line), this.any([this.single_quoted_next_line, n], this.rgx(`${blank_character}*`)));
       }
 
-      // [096]
-      // c-ns-properties(n,c) ::=
-      //   ( c-ns-tag-property
-      //   ( s-separate(n,c) c-ns-anchor-property )? )
-      //   | ( c-ns-anchor-property
-      //   ( s-separate(n,c) c-ns-tag-property )? )
-      c_ns_properties(n, c) {
-        return this.any(this.all(this.c_ns_tag_property, this.rep(0, 1, this.all([this.s_separate, n, c], this.c_ns_anchor_property))), this.all(this.c_ns_anchor_property, this.rep(0, 1, this.all([this.s_separate, n, c], this.c_ns_tag_property))));
+      single_quoted_next_line(n) {
+        return this.all([this.flow_folded_whitespace, n], this.rep(0, 1, this.all(this.rgx(re_single_quoted_next_line), this.any([this.single_quoted_next_line, n], this.rgx(`${blank_character}*`)))));
       }
 
-      // [097]
-      // c-ns-tag-property ::=
-      //   c-verbatim-tag
-      //   | c-ns-shorthand-tag
-      //   | c-non-specific-tag
-      c_ns_tag_property() {
-        return this.rgx(RegExp(`(?:${c_verbatim_tag}|${c_ns_shorthand_tag}|${c_non_specific_tag})`, "y"));
+      // [97]
+      // flow-plain-scalar(n,FLOW-OUT)  ::= plain-scalar-multi-line(n,FLOW-OUT)
+      // flow-plain-scalar(n,FLOW-IN)   ::= plain-scalar-multi-line(n,FLOW-IN)
+      // flow-plain-scalar(n,BLOCK-KEY) ::= plain-scalar-single-line(BLOCK-KEY)
+      // flow-plain-scalar(n,FLOW-KEY)  ::= plain-scalar-single-line(FLOW-KEY)
+      flow_plain_scalar(n, c) {
+        return this.case(c, {
+          'block-key': [this.plain_scalar_single_line, c],
+          'flow-in': [this.plain_scalar_multi_line, n, c],
+          'flow-key': [this.plain_scalar_single_line, c],
+          'flow-out': [this.plain_scalar_multi_line, n, c]
+        });
+      }
+
+      // [98]
+      // plain-scalar-multi-line(n,c) ::=
+      //   plain-scalar-single-line(c)
+      //   plain-scalar-next-line(n,c)*
+      plain_scalar_multi_line(n, c) {
+        return this.all([this.plain_scalar_single_line, c], this.rep(0, null, [this.plain_scalar_next_line, n, c]));
+      }
+
+      // [99]
+      // plain-scalar-single-line(c) ::=
+      //   plain-scalar-first-character(c)
+      //   plain-scalar-line-characters(c)
+      plain_scalar_single_line(c) {
+        return this.all([this.plain_scalar_first_character, c], [this.plain_scalar_line_characters, c]);
+      }
+
+      // [100]
+      // plain-scalar-next-line(n,c) ::=
+      //   flow-folded-whitespace(n)
+      //   plain-scalar-characters(c)
+      //   plain-scalar-line-characters(c)
+      plain_scalar_next_line(n, c) {
+        return this.all([this.flow_folded_whitespace, n], [this.plain_scalar_characters, c], [this.plain_scalar_line_characters, c]);
       }
 
       // [101]
-      // c-ns-anchor-property ::=
-      //   '&' ns-anchor-name
-      c_ns_anchor_property() {
-        return this.rgx(RegExp(`&${ns_anchor_name}`, "yu"));
+      // plain-scalar-line-characters(c) ::=
+      //   (
+      //     blank-character*
+      //     plain-scalar-characters(c)
+      //   )*
+      plain_scalar_line_characters(c) {
+        return this.rep(0, null, this.all(this.rgx(`${blank_character}*`), [this.plain_scalar_characters, c]));
+      }
+
+      // [102]
+      // plain-scalar-first-character(c) ::=
+      //     (
+      //         non-space-character
+      //       - '?'                         # Mapping key
+      //       - ':'                         # Mapping value
+      //       - '-'                         # Sequence entry
+      //       - '{'                         # Mapping start
+      //       - '}'                         # Mapping end
+      //       - '['                         # Sequence start
+      //       - ']'                         # Sequence end
+      //       - ','                         # Entry separator
+      //       - '#'                         # Comment
+      //       - '&'                         # Anchor
+      //       - '*'                         # Alias
+      //       - '!'                         # Tag
+      //       - '|'                         # Literal scalar
+      //       - '>'                         # Folded scalar
+      //       - "'"                         # Single quote
+      //       - '"'                         # Double quote
+      //       - '%'                         # Directive
+      //       - '@'                         # Reserved
+      //       - '`'                         # Reserved
+      //     )
+      //   | (
+      //       ( '?' | ':' | '-' )
+      //       [ lookahead = non-space-plain-scalar-character(c) ]
+      //     )
+      plain_scalar_first_character(c) {
+        return this.any(this.rgx(RegExp(`(?![-?:,[\\]{}\\x23&*!|>'"%@\`])${non_space_character // '#'
+}`, "yu")), this.all(this.rgx(/[?:-]/y), this.chk('=', [this.non_space_plain_scalar_character, c])));
+      }
+
+      // [103]
+      // plain-scalar-characters(c) ::=
+      //     (
+      //         non-space-plain-scalar-character(c)
+      //       - ':'
+      //       - '#'
+      //     )
+      //   | (
+      //       [ lookbehind = non-space-character ]
+      //       '#'
+      //     )
+      //   | (
+      //       ':'
+      //       [ lookahead = non-space-plain-scalar-character(c) ]
+      //     )
+
+        // TODO
+      //   plain_scalar_characters = (c)->
+      //     non_space_plain_scalar_character = ...
+      //     ///
+      //       (?:
+      //         (?:
+      //           (?!
+      //             [
+      //               :
+      //               \x23        # '#'
+      //             ]
+      //           )
+
+      //     ///yu
+      plain_scalar_characters(c) {
+        return this.any(this.but([this.non_space_plain_scalar_character, c], this.chr(':'), this.chr('#')), this.all(this.chk('<=', this.rgx(re_non_space_character)), this.chr('#')), this.all(this.chr(':'), this.chk('=', [this.non_space_plain_scalar_character, c])));
       }
 
       // [104]
-      // c-ns-alias-node ::=
-      //   '*' ns-anchor-name
-      c_ns_alias_node() {
-        return this.rgx(RegExp(`\\*${ns_anchor_name}`, "yu"));
+      // non-space-plain-scalar-character(FLOW-OUT)  ::= block-plain-scalar-character
+      // non-space-plain-scalar-character(FLOW-IN)   ::= flow-plain-scalar-character
+      // non-space-plain-scalar-character(BLOCK-KEY) ::= block-plain-scalar-character
+      // non-space-plain-scalar-character(FLOW-KEY)  ::= flow-plain-scalar-character
+      non_space_plain_scalar_character(c) {
+        return this.case(c, {
+          'block-key': this.block_plain_scalar_character,
+          'flow-in': this.flow_plain_scalar_character,
+          'flow-key': this.flow_plain_scalar_character,
+          'flow-out': this.block_plain_scalar_character
+        });
+      }
+
+      // [105]
+      // block-plain-scalar-character ::=
+      //   non-space-character
+      block_plain_scalar_character() {
+        return this.rgx(RegExp(`(?:${non_space_character})`, "yu"));
       }
 
       // [106]
-      // e-node ::=
-      //   e-scalar
-      e_node() {
+      // flow-plain-scalar-character ::=
+      //     non-space-characters
+      //   - flow-collection-indicators
+      flow_plain_scalar_character() {
+        return this.rgx(RegExp(`(?:(?!${flow_collection_indicator})${non_space_character})`, "yu"));
+      }
+
+      // [107]
+      // alias-node ::=
+      //   '*'
+      //   anchor-name
+      alias_node() {
+        return this.rgx(RegExp(`\\*${anchor_name}`, "yu"));
+      }
+
+      // [108]
+      // empty-node ::=
+      //   ""
+      empty_node() {
         return this.empty;
       }
 
       // [109]
-      // c-double-quoted(n,c) ::=
-      //   '"' nb-double-text(n,c)
-      //   '"'
-      c_double_quoted(n, c) {
-        return this.all(this.chr('"'), [this.nb_double_text, n, c], this.chr('"'));
+      // indentation-spaces(0) ::=
+      //   ""
+      indentation_spaces() {
+        return this.rgx(RegExp(`${space_character}*`, "y"));
+      }
+
+      // indentation-spaces(n+1) ::=
+      //   space-character
+      //   indentation-spaces(n)
+
+        // When n≥0
+      indentation_spaces_n(n) {
+        return this.rgx(RegExp(`${space_character}{${n}}`, "y"));
       }
 
       // [110]
-      // nb-double-text(n,c) ::=
-      //   ( c = flow-out => nb-double-multi-line(n) )
-      //   ( c = flow-in => nb-double-multi-line(n) )
-      //   ( c = block-key => nb-double-one-line )
-      //   ( c = flow-key => nb-double-one-line )
-      nb_double_text(n, c) {
-        return this.case(c, {
-          'block-key': this.rgx(re_nb_double_one_line),
-          'flow-in': [this.nb_double_multi_line, n],
-          'flow-key': this.rgx(re_nb_double_one_line),
-          'flow-out': [this.nb_double_multi_line, n]
-        });
+      // indentation-spaces-less-than(1) ::=
+      //   ""
+
+        // # When n≥1
+      indentation_spaces_less_than(n) {
+        return this.all(this.indentation_spaces(), this.lt(this.len(this.match), n));
+      }
+
+      // [111]
+      // indentation-spaces-less-or-equal(0) ::=
+      //   ""
+
+        // # When n≥0
+      indentation_spaces_less_or_equal(n) {
+        return this.all(this.indentation_spaces(), this.le(this.len(this.match), n));
       }
 
       // [112]
-      // s-double-escaped(n) ::=
-      //   s-white* '\'
-      //   b-non-content
-      //   l-empty(n,flow-in)* s-flow-line-prefix(n)
-      s_double_escaped(n) {
-        return this.all(this.rgx(RegExp(`${s_white}*\\\\${b_non_content}`, "y")), this.rep2(0, null, [this.l_empty, n, "flow-in"]), [this.s_flow_line_prefix, n]);
+      // line-prefix-spaces(n,BLOCK-OUT) ::= indentation-spaces-exact(n)
+      // line-prefix-spaces(n,BLOCK-IN)  ::= indentation-spaces-exact(n)
+      // line-prefix-spaces(n,FLOW-OUT)  ::= indentation-spaces-plus-maybe-more(n)
+      // line-prefix-spaces(n,FLOW-IN)   ::= indentation-spaces-plus-maybe-more(n)
+      line_prefix_spaces(n, c) {
+        return this.case(c, {
+          'block-in': [this.indentation_spaces_exact, n],
+          'block-out': [this.indentation_spaces_exact, n],
+          'flow-in': [this.indentation_spaces_plus_maybe_more, n],
+          'flow-out': [this.indentation_spaces_plus_maybe_more, n]
+        });
+      }
+
+      // [113]
+      // indentation-spaces-exact(n) ::=
+      //   indentation-spaces(n)
+      indentation_spaces_exact(n) {
+        return this.indentation_spaces_n(n);
+      }
+
+      // [114]
+      // indentation-spaces-plus-maybe-more(n) ::=
+      //   indentation-spaces(n)
+      //   separation-blanks?
+      indentation_spaces_plus_maybe_more(n) {
+        return this.all(this.indentation_spaces_n(n), this.rep(0, 1, this.rgx(re_separation_lines)));
       }
 
       // [115]
-      // s-double-next-line(n) ::=
-      //   s-double-break(n)
-      //   ( ns-double-char nb-ns-double-in-line
-      //   ( s-double-next-line(n) | s-white* ) )?
-      s_double_next_line(n) {
-        return this.all(this.any([this.s_double_escaped, n], [this.s_flow_folded, n]), this.rep(0, 1, this.all(this.rgx(re_ns_double_char), this.rgx(re_nb_ns_double_in_line), this.any([this.s_double_next_line, n], this.rgx(`${s_white}*`)))));
+      // flow-folded-whitespace(n) ::=
+      //   separation-blanks?
+      //   folded-whitespace(n,FLOW-IN)
+      //   indentation-spaces-plus-maybe-more(n)
+      flow_folded_whitespace(n) {
+        return this.all(this.rep(0, 1, this.rgx(re_separation_lines)), [this.folded_whitespace, n, "flow-in"], [this.indentation_spaces_plus_maybe_more, n]);
       }
 
       // [116]
-      // nb-double-multi-line(n) ::=
-      //   nb-ns-double-in-line
-      //   ( s-double-next-line(n) | s-white* )
-      nb_double_multi_line(n) {
-        return this.all(this.rgx(re_nb_ns_double_in_line), this.any([this.s_double_next_line, n], this.rgx(`${s_white}*`)));
+      // folded-whitespace(n,c) ::=
+      //     (
+      //       line-break
+      //       empty-line(n,c)+
+      //     )
+      //   | break-as-space
+      // A.4.4. Comments
+      folded_whitespace(n, c) {
+        return this.any(this.all(this.rgx(re_line_break), this.rep(1, null, [this.empty_line, n, c])), this.rgx(re_break_as_space));
+      }
+
+      // [117]
+      // comment-lines ::=
+      //     comment-line+
+      //   | <start-of-line>
+      comment_lines() {
+        return this.all(this.any(this.comment_line, this.start_of_line), this.rep(0, null, this.l_comment));
+      }
+
+      // [118]
+      // comment-line ::=
+      //   separation-blanks
+      //   comment-content?
+      //   line-ending
+      comment_line() {
+        return this.all(this.rep(0, 1, this.all(this.rgx(re_separation_lines), this.rgx(RegExp(`${comment_content}?`, "yu"), true))), this.rgx(re_line_ending, true));
       }
 
       // [120]
-      // c-single-quoted(n,c) ::=
-      //   ''' nb-single-text(n,c)
-      //   '''
-      c_single_quoted(n, c) {
-        return this.all(this.chr("'"), [this.nb_single_text, n, c], this.chr("'"));
+      // empty-line(n,c) ::=
+      //   (
+      //       line-prefix-spaces(n,c)
+      //     | indentation-spaces-less-than(n)
+      //   )
+      //   break-as-line-feed
+      empty_line(n, c) {
+        return this.all(this.any([this.line_prefix_spaces, n, c], [this.indentation_spaces_less_than, n]), this.rgx(re_break_as_line_feed));
       }
 
       // [121]
-      // nb-single-text(n,c) ::=
-      //   ( c = flow-out => nb-single-multi-line(n) )
-      //   ( c = flow-in => nb-single-multi-line(n) )
-      //   ( c = block-key => nb-single-one-line )
-      //   ( c = flow-key => nb-single-one-line )
-      nb_single_text(n, c) {
+      // separation-characters(n,BLOCK-OUT) ::= separation-lines(n)
+      // separation-characters(n,BLOCK-IN)  ::= separation-lines(n)
+      // separation-characters(n,FLOW-OUT)  ::= separation-lines(n)
+      // separation-characters(n,FLOW-IN)   ::= separation-lines(n)
+      // separation-characters(n,BLOCK-KEY) ::= separation-blanks
+      // separation-characters(n,FLOW-KEY)  ::= separation-blanks
+      separation_characters(n, c) {
         return this.case(c, {
-          'block-key': this.rgx(re_nb_single_one_line),
-          'flow-in': [this.nb_single_multi_line, n],
-          'flow-key': this.rgx(re_nb_single_one_line),
-          'flow-out': [this.nb_single_multi_line, n]
+          'block-in': [this.separation_lines, n],
+          'block-key': this.rgx(re_separation_lines),
+          'block-out': [this.separation_lines, n],
+          'flow-in': [this.separation_lines, n],
+          'flow-key': this.rgx(re_separation_lines),
+          'flow-out': [this.separation_lines, n]
         });
       }
 
-      s_single_next_line(n) {
-        return this.all([this.s_flow_folded, n], this.rep(0, 1, this.all(this.rgx(re_s_single_next_line), this.any([this.s_single_next_line, n], this.rgx(`${s_white}*`)))));
+      separation_lines(n) {
+        return this.any(this.all(this.comment_lines, [this.indentation_spaces_plus_maybe_more, n]), this.rgx(re_separation_lines));
+      }
+
+      // [124]
+      // yaml-directive-line ::=
+      //   "YAML"
+      //   separation-blanks
+      //   yaml-version-number
+      yaml_directive_line() {
+        return this.all(this.rgx(RegExp(`(?:YAML${separation_lines})`, "y")), this.yaml_version_number);
       }
 
       // [125]
-      // nb-single-multi-line(n) ::=
-      //   nb-ns-single-in-line
-      //   ( s-single-next-line(n) | s-white* )
-      nb_single_multi_line(n) {
-        return this.all(this.rgx(re_nb_ns_single_in_line), this.any([this.s_single_next_line, n], this.rgx(`${s_white}*`)));
+      // yaml-version-number ::=
+      //   decimal-digit+
+      //   '.'
+      //   decimal-digit+
+      yaml_version_number() {
+        return this.rgx(RegExp(`${decimal_digit}+\\.${decimal_digit}+`, "y"));
       }
 
       // [126]
-      // ns-plain-first(c) ::=
-      //   ( ns-char - c-indicator )
-      //   | ( ( '?' | ':' | '-' )
-      //   <followed_by_an_ns-plain-safe(c)> )
-      ns_plain_first(c) {
-        return this.any(this.rgx(RegExp(`(?!${c_indicator})${ns_char}`, "yu")), this.all(this.rgx(/[?:-]/y), this.chk('=', [this.ns_plain_safe, c])));
+      // reserved-directive-line ::=
+      //   directive-name
+      //   (
+      //     separation-blanks
+      //     directive-parameter
+      //   )*
+      reserved_directive_line() {
+        return this.rgx(RegExp(`${directive_name}(?:${separation_lines}${directive_parameter})*`, "yu"));
       }
 
-      // [127]
-      // ns-plain-safe(c) ::=
-      //   ( c = flow-out => ns-plain-safe-out )
-      //   ( c = flow-in => ns-plain-safe-in )
-      //   ( c = block-key => ns-plain-safe-out )
-      //   ( c = flow-key => ns-plain-safe-in )
-      ns_plain_safe(c) {
-        return this.case(c, {
-          'block-key': this.rgx(re_ns_plain_safe_out),
-          'flow-in': this.rgx(re_ns_plain_safe_in),
-          'flow-key': this.rgx(re_ns_plain_safe_in),
-          'flow-out': this.rgx(re_ns_plain_safe_out)
-        });
+      // [129]
+      // tag-directive-line ::=
+      //   "TAG"
+      //   separation-blanks
+      //   tag-handle
+      //   separation-blanks
+      //   tag-prefix
+      tag_directive_line() {
+        return this.all(this.rgx(RegExp(`TAG${separation_lines}`, "y")), this.tag_handle, this.rgx(re_separation_lines), this.tag_prefix);
       }
 
-      // [130]
-      // ns-plain-char(c) ::=
-      //   ( ns-plain-safe(c) - ':' - '#' )
-      //   | ( <an_ns-char_preceding> '#' )
-      //   | ( ':' <followed_by_an_ns-plain-safe(c)> )
-      ns_plain_char(c) {
-        return this.any(this.but([this.ns_plain_safe, c], this.chr(':'), this.chr('#')), this.all(this.chk('<=', this.rgx(re_ns_char)), this.chr('#')), this.all(this.chr(':'), this.chk('=', [this.ns_plain_safe, c])));
-      }
-
-      // [131]
-      // ns-plain(n,c) ::=
-      //   ( c = flow-out => ns-plain-multi-line(n,c) )
-      //   ( c = flow-in => ns-plain-multi-line(n,c) )
-      //   ( c = block-key => ns-plain-one-line(c) )
-      //   ( c = flow-key => ns-plain-one-line(c) )
-      ns_plain(n, c) {
-        return this.case(c, {
-          'block-key': [this.ns_plain_one_line, c],
-          'flow-in': [this.ns_plain_multi_line, n, c],
-          'flow-key': [this.ns_plain_one_line, c],
-          'flow-out': [this.ns_plain_multi_line, n, c]
-        });
-      }
-
-      // [132]
-      // nb-ns-plain-in-line(c) ::=
-      //   ( s-white*
-      //   ns-plain-char(c) )*
-      nb_ns_plain_in_line(c) {
-        return this.rep(0, null, this.all(this.rgx(`${s_white}*`), [this.ns_plain_char, c]));
-      }
-
-      // [133]
-      // ns-plain-one-line(c) ::=
-      //   ns-plain-first(c)
-      //   nb-ns-plain-in-line(c)
-      ns_plain_one_line(c) {
-        return this.all([this.ns_plain_first, c], [this.nb_ns_plain_in_line, c]);
+      tag_handle() {
+        return this.rgx(re_tag_handle);
       }
 
       // [134]
-      // s-ns-plain-next-line(n,c) ::=
-      //   s-flow-folded(n)
-      //   ns-plain-char(c) nb-ns-plain-in-line(c)
-      s_ns_plain_next_line(n, c) {
-        return this.all([this.s_flow_folded, n], [this.ns_plain_char, c], [this.nb_ns_plain_in_line, c]);
-      }
-
-      // [135]
-      // ns-plain-multi-line(n,c) ::=
-      //   ns-plain-one-line(c)
-      //   s-ns-plain-next-line(n,c)*
-      ns_plain_multi_line(n, c) {
-        return this.all([this.ns_plain_one_line, c], this.rep(0, null, [this.s_ns_plain_next_line, n, c]));
-      }
-
-      // [136]
-      // in-flow(c) ::=
-      //   ( c = flow-out => flow-in )
-      //   ( c = flow-in => flow-in )
-      //   ( c = block-key => flow-key )
-      //   ( c = flow-key => flow-key )
-      in_flow(c) {
-        return this.flip(c, {
-          'block-key': "flow-key",
-          'flow-in': "flow-in",
-          'flow-key': "flow-key",
-          'flow-out': "flow-in"
-        });
+      // tag-prefix ::=
+      //     local-tag-prefix
+      //   | global-tag-prefix
+      tag_prefix() {
+        return this.rgx(RegExp(`(?:${local_tag_prefix}|${global_tag_prefix})`, "y"));
       }
 
       // [137]
-      // c-flow-sequence(n,c) ::=
-      //   '[' s-separate(n,c)?
-      //   ns-s-flow-seq-entries(n,in-flow(c))? ']'
-      c_flow_sequence(n, c) {
-        return this.all(this.chr('['), this.rep(0, 1, [this.s_separate, n, c]), this.rep2(0, 1, [this.ns_s_flow_seq_entries, n, [this.in_flow, c]]), this.chr(']'));
+      // node-properties(n,c) ::=
+      //     (
+      //       anchor-property
+      //       (
+      //         separation-characters(n,c)
+      //         tag-property
+      //       )?
+      //     )
+      //   | (
+      //       tag-property
+      //       (
+      //         separation-characters(n,c)
+      //         anchor-property
+      //       )?
+      //     )
+      node_properties(n, c) {
+        return this.any(this.all(this.tag_property, this.rep(0, 1, this.all([this.separation_characters, n, c], this.anchor_property))), this.all(this.anchor_property, this.rep(0, 1, this.all([this.separation_characters, n, c], this.tag_property))));
       }
 
       // [138]
-      // ns-s-flow-seq-entries(n,c) ::=
-      //   ns-flow-seq-entry(n,c)
-      //   s-separate(n,c)?
-      //   ( ',' s-separate(n,c)?
-      //   ns-s-flow-seq-entries(n,c)? )?
-      ns_s_flow_seq_entries(n, c) {
-        return this.all([this.ns_flow_seq_entry, n, c], this.rep(0, 1, [this.s_separate, n, c]), this.rep2(0, 1, this.all(this.chr(','), this.rep(0, 1, [this.s_separate, n, c]), this.rep2(0, 1, [this.ns_s_flow_seq_entries, n, c]))));
-      }
-
-      // [139]
-      // ns-flow-seq-entry(n,c) ::=
-      //   ns-flow-pair(n,c) | ns-flow-node(n,c)
-      ns_flow_seq_entry(n, c) {
-        return this.any([this.ns_flow_pair, n, c], [this.ns_flow_node, n, c]);
-      }
-
-      // [140]
-      // c-flow-mapping(n,c) ::=
-      //   '{' s-separate(n,c)?
-      //   ns-s-flow-map-entries(n,in-flow(c))? '}'
-      c_flow_mapping(n, c) {
-        return this.all(this.chr('{'), this.rep(0, 1, [this.s_separate, n, c]), this.rep2(0, 1, [this.ns_s_flow_map_entries, n, [this.in_flow, c]]), this.chr('}'));
+      // anchor-property ::=
+      //   '&'
+      //   anchor-name
+      anchor_property() {
+        return this.rgx(RegExp(`&${anchor_name}`, "yu"));
       }
 
       // [141]
-      // ns-s-flow-map-entries(n,c) ::=
-      //   ns-flow-map-entry(n,c)
-      //   s-separate(n,c)?
-      //   ( ',' s-separate(n,c)?
-      //   ns-s-flow-map-entries(n,c)? )?
-      ns_s_flow_map_entries(n, c) {
-        return this.all([this.ns_flow_map_entry, n, c], this.rep(0, 1, [this.s_separate, n, c]), this.rep2(0, 1, this.all(this.chr(','), this.rep(0, 1, [this.s_separate, n, c]), this.rep2(0, 1, [this.ns_s_flow_map_entries, n, c]))));
+      // tag-property ::=
+      //     verbatim-tag
+      //   | shorthand-tag
+      //   | non-specific-tag
+      tag_property() {
+        return this.rgx(RegExp(`(?:${verbatim_tag}|${shorthand_tag}|${non_specific_tag})`, "y"));
       }
 
-      // [142]
-      // ns-flow-map-entry(n,c) ::=
-      //   ( '?' s-separate(n,c)
-      //   ns-flow-map-explicit-entry(n,c) )
-      //   | ns-flow-map-implicit-entry(n,c)
-      ns_flow_map_entry(n, c) {
-        return this.any(this.all(this.rgx(RegExp(`\\?${ws_lookahead}`, "y")), [this.s_separate, n, c], [this.ns_flow_map_explicit_entry, n, c]), [this.ns_flow_map_implicit_entry, n, c]);
-      }
+      //------------------------------------------------------------------------------
 
-      // [143]
-      // ns-flow-map-explicit-entry(n,c) ::=
-      //   ns-flow-map-implicit-entry(n,c)
-      //   | ( e-node
-      //   e-node )
-      ns_flow_map_explicit_entry(n, c) {
-        return this.any([this.ns_flow_map_implicit_entry, n, c], this.all(this.e_node, this.e_node));
-      }
+        // XXX Not sure if this can be replaced by s_b_comment:
 
-      // [144]
-      // ns-flow-map-implicit-entry(n,c) ::=
-      //   ns-flow-map-yaml-key-entry(n,c)
-      //   | c-ns-flow-map-empty-key-entry(n,c)
-      //   | c-ns-flow-map-json-key-entry(n,c)
-      ns_flow_map_implicit_entry(n, c) {
-        return this.any([this.ns_flow_map_yaml_key_entry, n, c], [this.c_ns_flow_map_empty_key_entry, n, c], [this.c_ns_flow_map_json_key_entry, n, c]);
-      }
-
-      // [145]
-      // ns-flow-map-yaml-key-entry(n,c) ::=
-      //   ns-flow-yaml-node(n,c)
-      //   ( ( s-separate(n,c)?
-      //   c-ns-flow-map-separate-value(n,c) )
-      //   | e-node )
-      ns_flow_map_yaml_key_entry(n, c) {
-        return this.all([this.ns_flow_yaml_node, n, c], this.any(this.all(this.rep(0, 1, [this.s_separate, n, c]), [this.c_ns_flow_map_separate_value, n, c]), this.e_node));
-      }
-
-      // [146]
-      // c-ns-flow-map-empty-key-entry(n,c) ::=
-      //   e-node
-      //   c-ns-flow-map-separate-value(n,c)
-      c_ns_flow_map_empty_key_entry(n, c) {
-        return this.all(this.e_node, [this.c_ns_flow_map_separate_value, n, c]);
-      }
-
-      // [147]
-      // c-ns-flow-map-separate-value(n,c) ::=
-      //   ':' <not_followed_by_an_ns-plain-safe(c)>
-      //   ( ( s-separate(n,c) ns-flow-node(n,c) )
-      //   | e-node )
-      c_ns_flow_map_separate_value(n, c) {
-        return this.all(this.chr(':'), this.chk('!', [this.ns_plain_safe, c]), this.any(this.all([this.s_separate, n, c], [this.ns_flow_node, n, c]), this.e_node));
-      }
-
-      // [148]
-      // c-ns-flow-map-json-key-entry(n,c) ::=
-      //   c-flow-json-node(n,c)
-      //   ( ( s-separate(n,c)?
-      //   c-ns-flow-map-adjacent-value(n,c) )
-      //   | e-node )
-      c_ns_flow_map_json_key_entry(n, c) {
-        return this.all([this.c_flow_json_node, n, c], this.any(this.all(this.rep(0, 1, [this.s_separate, n, c]), [this.c_ns_flow_map_adjacent_value, n, c]), this.e_node));
-      }
-
-      // [149]
-      // c-ns-flow-map-adjacent-value(n,c) ::=
-      //   ':' ( (
-      //   s-separate(n,c)?
-      //   ns-flow-node(n,c) )
-      //   | e-node )
-      c_ns_flow_map_adjacent_value(n, c) {
-        return this.all(this.chr(':'), this.any(this.all(this.rep(0, 1, [this.s_separate, n, c]), [this.ns_flow_node, n, c]), this.e_node));
-      }
-
-      // [150]
-      // ns-flow-pair(n,c) ::=
-      //   ( '?' s-separate(n,c)
-      //   ns-flow-map-explicit-entry(n,c) )
-      //   | ns-flow-pair-entry(n,c)
-      ns_flow_pair(n, c) {
-        return this.any(this.all(this.rgx(RegExp(`\\?${ws_lookahead}`)), [this.s_separate, n, c], [this.ns_flow_map_explicit_entry, n, c]), [this.ns_flow_pair_entry, n, c]);
-      }
-
-      // [151]
-      // ns-flow-pair-entry(n,c) ::=
-      //   ns-flow-pair-yaml-key-entry(n,c)
-      //   | c-ns-flow-map-empty-key-entry(n,c)
-      //   | c-ns-flow-pair-json-key-entry(n,c)
-      ns_flow_pair_entry(n, c) {
-        return this.any([this.ns_flow_pair_yaml_key_entry, n, c], [this.c_ns_flow_map_empty_key_entry, n, c], [this.c_ns_flow_pair_json_key_entry, n, c]);
-      }
-
-      // [152]
-      // ns-flow-pair-yaml-key-entry(n,c) ::=
-      //   ns-s-implicit-yaml-key(flow-key)
-      //   c-ns-flow-map-separate-value(n,c)
-      ns_flow_pair_yaml_key_entry(n, c) {
-        return this.all([this.ns_s_implicit_yaml_key, "flow-key"], [this.c_ns_flow_map_separate_value, n, c]);
-      }
-
-      // [153]
-      // c-ns-flow-pair-json-key-entry(n,c) ::=
-      //   c-s-implicit-json-key(flow-key)
-      //   c-ns-flow-map-adjacent-value(n,c)
-      c_ns_flow_pair_json_key_entry(n, c) {
-        return this.all([this.c_s_implicit_json_key, "flow-key"], [this.c_ns_flow_map_adjacent_value, n, c]);
-      }
-
-      // [154]
-      // ns-s-implicit-yaml-key(c) ::=
-      //   ns-flow-yaml-node(n/a,c)
-      //   s-separate-in-line?
-      //   <at_most_1024_characters_altogether>
-      ns_s_implicit_yaml_key(c) {
-        return this.all(this.max(1024), [this.ns_flow_yaml_node, null, c], this.rep(0, 1, this.rgx(re_s_separate_in_line)));
-      }
-
-      // [155]
-      // c-s-implicit-json-key(c) ::=
-      //   c-flow-json-node(n/a,c)
-      //   s-separate-in-line?
-      //   <at_most_1024_characters_altogether>
-      c_s_implicit_json_key(c) {
-        return this.all(this.max(1024), [this.c_flow_json_node, null, c], this.rep(0, 1, this.rgx(re_s_separate_in_line)));
-      }
-
-      // [156]
-      // ns-flow-yaml-content(n,c) ::=
-      //   ns-plain(n,c)
-      ns_flow_yaml_content(n, c) {
-        return [this.ns_plain, n, c];
-      }
-
-      // [157]
-      // c-flow-json-content(n,c) ::=
-      //   c-flow-sequence(n,c) | c-flow-mapping(n,c)
-      //   | c-single-quoted(n,c) | c-double-quoted(n,c)
-      c_flow_json_content(n, c) {
-        return this.any([this.c_flow_sequence, n, c], [this.c_flow_mapping, n, c], [this.c_single_quoted, n, c], [this.c_double_quoted, n, c]);
-      }
-
-      // [158]
-      // ns-flow-content(n,c) ::=
-      //   ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
-      ns_flow_content(n, c) {
-        return this.any([this.ns_flow_yaml_content, n, c], [this.c_flow_json_content, n, c]);
-      }
-
-      // [159]
-      // ns-flow-yaml-node(n,c) ::=
-      //   c-ns-alias-node
-      //   | ns-flow-yaml-content(n,c)
-      //   | ( c-ns-properties(n,c)
-      //   ( ( s-separate(n,c)
-      //   ns-flow-yaml-content(n,c) )
-      //   | e-scalar ) )
-      ns_flow_yaml_node(n, c) {
-        return this.any(this.c_ns_alias_node, [this.ns_flow_yaml_content, n, c], this.all([this.c_ns_properties, n, c], this.any(this.all([this.s_separate, n, c], [this.ns_flow_content, n, c]), this.e_node)));
-      }
-
-      // [160]
-      // c-flow-json-node(n,c) ::=
-      //   ( c-ns-properties(n,c)
-      //   s-separate(n,c) )?
-      //   c-flow-json-content(n,c)
-      c_flow_json_node(n, c) {
-        return this.all(this.rep(0, 1, this.all([this.c_ns_properties, n, c], [this.s_separate, n, c])), [this.c_flow_json_content, n, c]);
-      }
-
-      // [161]
-      // ns-flow-node(n,c) ::=
-      //   c-ns-alias-node
-      //   | ns-flow-content(n,c)
-      //   | ( c-ns-properties(n,c)
-      //   ( ( s-separate(n,c)
-      //   ns-flow-content(n,c) )
-      //   | e-scalar ) )
-      ns_flow_node(n, c) {
-        return this.any(this.c_ns_alias_node, [this.ns_flow_content, n, c], this.all([this.c_ns_properties, n, c], this.any(this.all([this.s_separate, n, c], [this.ns_flow_content, n, c]), this.e_node)));
-      }
-
-      // [162]
-      // c-b-block-header(m,t) ::=
-      //   ( ( c-indentation-indicator(m)
-      //   c-chomping-indicator(t) )
-      //   | ( c-chomping-indicator(t)
-      //   c-indentation-indicator(m) ) )
-      //   s-b-comment
-      c_b_block_header(n) {
-        return this.all(this.any(this.all([this.c_indentation_indicator, n], this.c_chomping_indicator, this.rgx(ws_lookahead)), this.all(this.c_chomping_indicator, [this.c_indentation_indicator, n], this.rgx(ws_lookahead))), this.s_b_comment);
-      }
-
-      // [163]
-      // c-indentation-indicator(m) ::=
-      //   ( ns-dec-digit => m = ns-dec-digit - x:30 )
-      //   ( <empty> => m = auto-detect() )
-      c_indentation_indicator(n) {
-        return this.any(this.if(this.rng("\x31", "\x39"), this.set('m', this.ord(this.match))), this.if(this.empty, this.set('m', [this.auto_detect, n])));
-      }
-
-      // [164]
-      // c-chomping-indicator(t) ::=
-      //   ( '-' => t = strip )
-      //   ( '+' => t = keep )
-      //   ( <empty> => t = clip )
-      c_chomping_indicator() {
-        return this.any(this.if(this.chr('-'), this.set('t', "strip")), this.if(this.chr('+'), this.set('t', "keep")), this.if(this.empty, this.set('t', "clip")));
-      }
-
-      // [165]
-      // b-chomped-last(t) ::=
-      //   ( t = strip => b-non-content | <end_of_file> )
-      //   ( t = clip => b-as-line-feed | <end_of_file> )
-      //   ( t = keep => b-as-line-feed | <end_of_file> )
-      b_chomped_last(t) {
-        return this.case(t, {
-          'clip': this.any(this.rgx(re_b_as_line_feed), this.end_of_stream),
-          'keep': this.any(this.rgx(re_b_as_line_feed), this.end_of_stream),
-          'strip': this.any(this.rgx(re_b_non_content), this.end_of_stream)
-        });
-      }
-
-      // [166]
-      // l-chomped-empty(n,t) ::=
-      //   ( t = strip => l-strip-empty(n) )
-      //   ( t = clip => l-strip-empty(n) )
-      //   ( t = keep => l-keep-empty(n) )
-      l_chomped_empty(n, t) {
-        return this.case(t, {
-          'clip': [this.l_strip_empty, n],
-          'keep': [this.l_keep_empty, n],
-          'strip': [this.l_strip_empty, n]
-        });
-      }
-
-      // [167]
-      // l-strip-empty(n) ::=
-      //   ( s-indent(<=n) b-non-content )*
-      //   l-trail-comments(n)?
-      l_strip_empty(n) {
-        return this.all(this.rep(0, null, this.all([this.s_indent_le, n], this.rgx(re_b_non_content))), this.rep2(0, 1, [this.l_trail_comments, n]));
-      }
-
-      // [168]
-      // l-keep-empty(n) ::=
-      //   l-empty(n,block-in)*
-      //   l-trail-comments(n)?
-      l_keep_empty(n) {
-        return this.all(this.rep(0, null, [this.l_empty, n, "block-in"]), this.rep2(0, 1, [this.l_trail_comments, n]));
-      }
-
-      l_trail_comments(n) {
-        return this.all([this.s_indent_lt, n], this.rgx(re_l_trail_comments), this.rep(0, null, this.l_comment));
-      }
-
-      // [170]
-      // c-l+literal(n) ::=
-      //   '|' c-b-block-header(m,t)
-      //   l-literal-content(n+m,t)
-      c_l_literal(n) {
-        return this.all(this.chr('|'), [this.c_b_block_header, n], [this.l_literal_content, this.add(n, this.m()), this.t()]);
-      }
-
-      // [171]
-      // l-nb-literal-text(n) ::=
-      //   l-empty(n,block-in)*
-      //   s-indent(n) nb-char+
-      l_nb_literal_text(n) {
-        return this.all(this.rep(0, null, [this.l_empty, n, "block-in"]), this.rgx(s_indent_n(n)), this.rep2(1, null, this.rgx(re_nb_char)));
-      }
-
-      // [172]
-      // b-nb-literal-next(n) ::=
-      //   b-as-line-feed
-      //   l-nb-literal-text(n)
-      b_nb_literal_next(n) {
-        return this.all(this.rgx(re_b_as_line_feed), [this.l_nb_literal_text, n]);
-      }
-
-      // [173]
-      // l-literal-content(n,t) ::=
-      //   ( l-nb-literal-text(n)
-      //   b-nb-literal-next(n)*
-      //   b-chomped-last(t) )?
-      //   l-chomped-empty(n,t)
-      l_literal_content(n, t) {
-        return this.all(this.rep(0, 1, this.all([this.l_nb_literal_text, n], this.rep(0, null, [this.b_nb_literal_next, n]), [this.b_chomped_last, t])), [this.l_chomped_empty, n, t]);
-      }
-
-      // [174]
-      // c-l+folded(n) ::=
-      //   '>' c-b-block-header(m,t)
-      //   l-folded-content(n+m,t)
-      c_l_folded(n) {
-        return this.all(this.chr('>'), [this.c_b_block_header, n], [this.l_folded_content, this.add(n, this.m()), this.t()]);
-      }
-
-      // [175]
-      // s-nb-folded-text(n) ::=
-      //   s-indent(n) ns-char
-      //   nb-char*
-
-        // XXX Can't eliminate this yet for some reason.
-      ns_char() {
-        return this.rgx(re_ns_char);
-      }
-
-      s_nb_folded_text(n) {
-        return this.all(this.rgx(s_indent_n(n)), this.ns_char, this.rep(0, null, this.rgx(re_nb_char))); // XXX only used here
-      }
-
-      // [176]
-      // l-nb-folded-lines(n) ::=
-      //   s-nb-folded-text(n)
-      //   ( b-l-folded(n,block-in) s-nb-folded-text(n) )*
-      l_nb_folded_lines(n) {
-        return this.all([this.s_nb_folded_text, n], this.rep(0, null, this.all([this.b_l_folded, n, "block-in"], [this.s_nb_folded_text, n])));
-      }
-
-      // [177]
-      // s-nb-spaced-text(n) ::=
-      //   s-indent(n) s-white
-      //   nb-char*
-
-        // XXX renaming this or eliminating it causes tests to fail. :\
-      s_white() {
-        return this.rgx(RegExp(`[${s_space}\\t]`, "y"));
-      }
-
-      s_nb_spaced_text(n) {
-        return this.all(this.rgx(s_indent_n(n)), this.s_white, this.rep(0, null, this.rgx(re_nb_char))); // XXX only used here
-      }
-
-      // [178]
-      // b-l-spaced(n) ::=
-      //   b-as-line-feed
-      //   l-empty(n,block-in)*
-      b_l_spaced(n) {
-        return this.all(this.rgx(re_b_as_line_feed), this.rep(0, null, [this.l_empty, n, "block-in"]));
-      }
-
-      // [179]
-      // l-nb-spaced-lines(n) ::=
-      //   s-nb-spaced-text(n)
-      //   ( b-l-spaced(n) s-nb-spaced-text(n) )*
-      l_nb_spaced_lines(n) {
-        return this.all([this.s_nb_spaced_text, n], this.rep(0, null, this.all([this.b_l_spaced, n], [this.s_nb_spaced_text, n])));
-      }
-
-      // [180]
-      // l-nb-same-lines(n) ::=
-      //   l-empty(n,block-in)*
-      //   ( l-nb-folded-lines(n) | l-nb-spaced-lines(n) )
-      l_nb_same_lines(n) {
-        return this.all(this.rep(0, null, [this.l_empty, n, "block-in"]), this.any([this.l_nb_folded_lines, n], [this.l_nb_spaced_lines, n]));
-      }
-
-      // [181]
-      // l-nb-diff-lines(n) ::=
-      //   l-nb-same-lines(n)
-      //   ( b-as-line-feed l-nb-same-lines(n) )*
-      l_nb_diff_lines(n) {
-        return this.all([this.l_nb_same_lines, n], this.rep(0, null, this.all(this.rgx(re_b_as_line_feed), [this.l_nb_same_lines, n])));
-      }
-
-      // [182]
-      // l-folded-content(n,t) ::=
-      //   ( l-nb-diff-lines(n)
-      //   b-chomped-last(t) )?
-      //   l-chomped-empty(n,t)
-      l_folded_content(n, t) {
-        return this.all(this.rep(0, 1, this.all([this.l_nb_diff_lines, n], [this.b_chomped_last, t])), [this.l_chomped_empty, n, t]);
+        // [x078]
+      // l-comment ::=
+      //   s-separate-in-line c-nb-comment-text?
+      //   b-comment
+      l_comment() {
+        return this.all(this.rgx(re_separation_lines), this.rgx(RegExp(`${comment_content}*${line_ending}`, "yu")));
       }
 
     };
@@ -1153,347 +1374,563 @@
 
     end_of_file = '$';
 
-    init = [];
-
     // [004]
     // document-start-indicator ::=
     //   "---"
     [document_start_indicator, re_document_start_indicator] = [];
 
-    init.push(function() {
+    i004 = function() {
       return [document_start_indicator, re_document_start_indicator] = r(RegExp(`---${ws_lookahead}`));
-    });
+    };
 
     // [005]
     // document-end-indicator ::=
     //   "..."                             # Not followed by non-ws char
     [document_end_indicator, re_document_end_indicator] = r(/\.\.\./);
 
-    //------------------------------------------------------------------------------
-    // [001]
-    // c-printable ::=
-    //   x:9 | x:A | x:D | [x:20-x:7E]
-    //   | x:85 | [x:A0-x:D7FF] | [x:E000-x:FFFD]
-    //   | [x:10000-x:10FFFF]
-    [c_printable] = r(/[\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u);
+    // [051]
+    // line-trail-comments(n) ::=
+    //   indentation-spaces-less-than(n)
+    //   comment-content
+    //   line-ending
+    //   comment-line*
+    re_line_trail_comments = '';
 
-    // [002]
-    // nb-json ::=
-    //   x:9 | [x:20-x:10FFFF]
-    [nb_json] = r(/[\x09\x20-\u{10FFFF}]/u);
-
-    // [003]
-    // c-byte-order-mark ::=
-    //   x:FEFF
-    c_byte_order_mark = "\u{FEFF}";
-
-    // [022]               # XXX rule not in 1.3
-    // c-indicator ::=
-    //   '-' | '?' | ':' | ',' | '[' | ']' | '{' | '}'
-    //   | '#' | '&' | '*' | '!' | '|' | '>' | ''' | '"'
-    //   | '%' | '@' | '`'
-    [c_indicator] = r(/[-?:,[\]{}\x23&*!|>'"%@`]/); // '#'
-
-    // [023]
-    // c-flow-indicator ::=
-    //   ',' | '[' | ']' | '{' | '}'
-    [c_flow_indicator, , c_flow_indicator_s] = r(/[,[\]{}]/);
-
-    // [026]
-    // b-char ::=
-    //   b-line-feed | b-carriage-return
-    [b_char, re_b_char, b_char_s] = r(/[\x0A\x0D]/);
-
-    // [027]
-    // nb-char ::=
-    //   c-printable - b-char - c-byte-order-mark
-    [nb_char, re_nb_char] = r(RegExp(`(?:(?![${b_char_s}${c_byte_order_mark}])${c_printable})`, "u"));
-
-    // [028]
-    // b-break ::=
-    //   ( b-carriage-return b-line-feed )
-    //   | b-carriage-return
-    //   | b-line-feed
-    [b_break, re_b_break] = r(/(?:(?:\x0D\x0A)|\x0D|\x0A)/);
-
-    // [029]
-    // b-as-line-feed ::=
-    //   b-break
-    re_b_as_line_feed = re_b_break;
-
-    // [030]
-    // b-non-content ::=
-    //   b-break
-    b_non_content = b_break;
-
-    re_b_non_content = re_b_break;
-
-    // [031]
-    // s-space ::=
-    //   x:20
-    s_space = "\x20";
-
-    // [033]
-    // s-white ::=
-    //   s-space | s-tab
-    [s_white] = r(RegExp(`[${s_space}\\t]`));
-
-    [ws_lookahead] = r(RegExp(`(?=${end_of_file}|${s_white}|${b_break})`));
-
-    // [034]
-    // ns-char ::=
-    //   nb-char - s-white
-    [ns_char, re_ns_char] = r(RegExp(`(?:(?!${s_white})${nb_char})`, "u"));
-
-    // [035]
-    // ns-dec-digit ::=
-    //   [x:30-x:39]
-    [ns_dec_digit, , ns_dec_digit_s] = r(/[0-9]/);
-
-    // [036]
-    // ns-hex-digit ::=
-    //   ns-dec-digit
-    //   | [x:41-x:46] | [x:61-x:66]
-    [ns_hex_digit] = r(RegExp(`[${ns_dec_digit_s}A-Fa-f]`));
-
-    [
-      ,
-      ,
-      // [037]
-      // ns-ascii-letter ::=
-      //   [x:41-x:5A] | [x:61-x:7A]
-      ns_ascii_letter_s
-    ] = r(/[A-Za-z]/);
-
-    // [038]
-    // ns-word-char ::=
-    //   ns-dec-digit | ns-ascii-letter | '-'
-    [ns_word_char, , ns_word_char_s] = r(RegExp(`[${ns_dec_digit_s}${ns_ascii_letter_s}\\-]`));
-
-    // [039]
-    // ns-uri-char ::=
-    //   '%' ns-hex-digit ns-hex-digit | ns-word-char | '#'
-    //   | ';' | '/' | '?' | ':' | '@' | '&' | '=' | '+' | '$' | ','
-    //   | '_' | '.' | '!' | '~' | '*' | ''' | '(' | ')' | '[' | ']'
-    [ns_uri_char] = r(RegExp(`(?:%${ns_hex_digit}{2}|[${ns_word_char_s}\\x23;/?:@&=+$,_.!~*'()[\\]])`));
-
-    // [040]
-    // ns-tag-char ::=
-    //   ns-uri-char - '!' - c-flow-indicator
-    [ns_tag_char] = r(RegExp(`(?:(?![!${c_flow_indicator_s}])${ns_uri_char})`));
-
-    // [062]
-    // c-ns-esc-char ::=
-    //   '\'
-    //   ( ns-esc-null | ns-esc-bell | ns-esc-backspace
-    //   | ns-esc-horizontal-tab | ns-esc-line-feed
-    //   | ns-esc-vertical-tab | ns-esc-form-feed
-    //   | ns-esc-carriage-return | ns-esc-escape | ns-esc-space
-    //   | ns-esc-double-quote | ns-esc-slash | ns-esc-backslash
-    //   | ns-esc-next-line | ns-esc-non-breaking-space
-    //   | ns-esc-line-separator | ns-esc-paragraph-separator
-    //   | ns-esc-8-bit | ns-esc-16-bit | ns-esc-32-bit )
-    [c_ns_esc_char] = r(RegExp(`\\\\(?:[0abt\\tnvfre\\x20"/\\\\N_LP]|x${ns_hex_digit}{2}|u${ns_hex_digit}{4}|U${ns_hex_digit}{8})`));
-
-    [
-      ,
-      // [063]
-      re_s_indent
-    ] = r(RegExp(`${s_space}*`));
-
-    s_indent_n = function(n) {
-      return RegExp(`${s_space}{${n}}`, "y");
+    i051 = function() {
+      return [, re_line_trail_comments] = r(RegExp(`${comment_content}${line_ending}`, "u"));
     };
 
-    // [066]
-    // s-separate-in-line ::=
-    //   s-white+ | <start_of_line>
-    [s_separate_in_line, re_s_separate_in_line] = r(RegExp(`(?:${s_white}+|${start_of_line})`));
+    // [80]
+    // double-quoted-one-line ::=
+    //   non-break-double-quoted-character*
+    double_quoted_one_line = '';
 
-    // [072]
-    // b-as-space ::=
-    //   b-break
-    re_b_as_space = re_b_break;
+    i080 = function() {
+      return [, double_quoted_one_line] = r(RegExp(`${non_break_double_quoted_character}*`));
+    };
 
-    // [075]
-    // c-nb-comment-text ::=
-    //   '#' nb-char*
-    [c_nb_comment_text] = r(RegExp(`(?:\\x23${nb_char}*)`, "u"));
+    // [81]
+    // double-quoted-first-line ::=
+    //   (
+    //     blank-character*
+    //     non-space-double-quoted-character
+    //   )*
+    re_double_quoted_first_line = '';
 
-    // [076]
-    // b-comment ::=
-    //   b-non-content | <end_of_file>
-    [b_comment, re_b_comment] = r(RegExp(`(?:${b_non_content}|${end_of_file})`));
+    i081 = function() {
+      return [, re_double_quoted_first_line] = r(RegExp(`(?:${blank_character}*${non_space_double_quoted_character})*`));
+    };
 
-    // [084]
-    // ns-directive-name ::=
-    //   ns-char+
-    [ns_directive_name] = r(RegExp(`${ns_char}+`, "u"));
+    // [83]
+    // non-space-double-quoted-character ::=
+    //     non-break-double-quoted-character
+    //   - blank-character
+    [non_space_double_quoted_character, re_non_space_double_quoted_character] = [];
 
-    // [085]
-    // ns-directive-parameter ::=
-    //   ns-char+
-    [ns_directive_parameter] = r(RegExp(`${ns_char}+`, "u"));
+    i083 = function() {
+      return [non_space_double_quoted_character, re_non_space_double_quoted_character] = r(RegExp(`(?!${blank_character})${non_break_double_quoted_character}`));
+    };
 
-    [
-      ,
-      // [083]
-      // ns-reserved-directive ::=
-      //   ns-directive-name
-      //   ( s-separate-in-line ns-directive-parameter )*
-      re_ns_reserved_directive
-    ] = r(RegExp(`${ns_directive_name}(?:${s_separate_in_line}${ns_directive_parameter})*`, "u"));
+    // [84]
+    // non-break-double-quoted-character ::=
+    //     double-quoted-scalar-escape-character
+    //   | (
+    //         json-character
+    //       - '\'
+    //       - '"'
+    //     )
+    non_break_double_quoted_character = '';
 
-    // [090]
-    // c-primary-tag-handle ::=
-    //   '!'
-    c_primary_tag_handle = "!";
+    i084 = function() {
+      return [non_break_double_quoted_character] = r(RegExp(`(?:${double_quoted_scalar_escape_character}|(?![\\\\"])${json_character})`));
+    };
 
-    // [091]
-    // c-secondary-tag-handle ::=
-    //   '!' '!'
-    c_secondary_tag_handle = "!!";
+    // [91]
+    // single-quoted-one-line ::=
+    //   non-break-single-quoted-character*
+    re_single_quoted_one_line = '';
 
-    // [092]
-    // c-named-tag-handle ::=
-    //   '!' ns-word-char+ '!'
-    [c_named_tag_handle] = r(RegExp(`!${ns_word_char}+!`));
+    i091 = function() {
+      return [, re_single_quoted_one_line] = r(RegExp(`${non_break_single_quoted_character}*`));
+    };
 
-    // [089]
-    // c-tag-handle ::=
-    //   c-named-tag-handle
-    //   | c-secondary-tag-handle
-    //   | c-primary-tag-handle
-    [c_tag_handle, re_c_tag_handle] = r(RegExp(`(?:${c_named_tag_handle}|${c_secondary_tag_handle}|${c_primary_tag_handle})`));
+    // [92]
+    // single-quoted-first-line ::=
+    //   (
+    //     blank-character*
+    //     non-space-single-quoted-character
+    //   )*
+    [single_quoted_first_line, re_single_quoted_first_line] = [];
 
-    // [094]
-    // c-ns-local-tag-prefix ::=
-    //   '!' ns-uri-char*
-    [c_ns_local_tag_prefix] = r(RegExp(`!${ns_uri_char}*`));
+    i092 = function() {
+      return [single_quoted_first_line, re_single_quoted_first_line] = r(RegExp(`(?:${blank_character}*${non_space_single_quoted_character})*`));
+    };
 
-    // [095]
-    // ns-global-tag-prefix ::=
-    //   ns-tag-char ns-uri-char*
-    [ns_global_tag_prefix] = r(RegExp(`${ns_tag_char}${ns_uri_char}*`));
+    // [93]
+    // single-quoted-next-line(n) ::=
+    //   flow-folded-whitespace(n)
+    //   (
+    //     non-space-single-quoted-character
+    //     single-quoted-first-line
+    //     (
+    //         single-quoted-next-line(n)
+    //       | blank-character*
+    //     )
+    //   )?
+    re_single_quoted_next_line = '';
 
-    // [098]
-    // c-verbatim-tag ::=
-    //   '!' '<' ns-uri-char+ '>'
-    [c_verbatim_tag] = r(RegExp(`(?:!<${ns_uri_char}+>)`));
+    i093 = function() {
+      return [, re_single_quoted_next_line] = r(RegExp(`${non_space_single_quoted_character}${single_quoted_first_line}`));
+    };
 
-    // [099]
-    // c-ns-shorthand-tag ::=
-    //   c-tag-handle ns-tag-char+
-    [c_ns_shorthand_tag] = r(RegExp(`(${c_tag_handle}${ns_tag_char}+)`));
+    // [94]
+    // non-space-single-quoted-character ::=
+    //     non-break-single-quoted-character
+    //   - blank-character
+    non_space_single_quoted_character = '';
 
-    // [100]
-    // c-non-specific-tag ::=
-    //   '!'
-    c_non_specific_tag = "!";
+    i094 = function() {
+      return [non_space_single_quoted_character] = r(RegExp(`(?:(?!${blank_character})${non_break_single_quoted_character})`));
+    };
 
-    // [102]
-    // ns-anchor-char ::=
-    //   ns-char - c-flow-indicator
-    [ns_anchor_char] = r(RegExp(`(?:(?!${c_flow_indicator})${ns_char})+`, "u"));
+    // [95]
+    // non-break-single-quoted-character ::=
+    //     single-quoted-escaped-single-quote
+    //   | (
+    //         json-character
+    //       - "'"
+    //     )
+    non_break_single_quoted_character = '';
 
-    // [103]
-    // ns-anchor-name ::=
-    //   ns-anchor-char+
-    [ns_anchor_name] = r(RegExp(`(?:${ns_anchor_char})+`, "u"));
+    i095 = function() {
+      return [non_break_single_quoted_character] = r(RegExp(`(?:${single_quoted_escaped_single_quote}|(?:(?!')${json_character}))`));
+    };
 
-    // [107]
-    // nb-double-char ::=
-    //   c-ns-esc-char | ( nb-json - '\' - '"' )
-    [nb_double_char] = r(RegExp(`(?:${c_ns_esc_char}|(?![\\\\"])${nb_json})`));
+    // [96]
+    // single-quoted-escaped-single-quote ::=
+    //   "''"
+    single_quoted_escaped_single_quote = '';
 
-    // [108]
-    // ns-double-char ::=
-    //   nb-double-char - s-white
-    [ns_double_char, re_ns_double_char] = r(RegExp(`(?!${s_white})${nb_double_char}`));
-
-    [
-      ,
-      // [111]
-      // nb-double-one-line ::=
-      //   nb-double-char*
-      re_nb_double_one_line
-    ] = r(RegExp(`${nb_double_char}*`));
-
-    [
-      ,
-      // [114]
-      // nb-ns-double-in-line ::=
-      //   ( s-white* ns-double-char )*
-      re_nb_ns_double_in_line
-    ] = r(RegExp(`(?:${s_white}*${ns_double_char})*`));
-
-    // [117]
-    // c-quoted-quote ::=
-    //   ''' '''
-    [c_quoted_quote] = r(/''/);
-
-    // [118]
-    // nb-single-char ::=
-    //   c-quoted-quote | ( nb-json - ''' )
-    [nb_single_char] = r(RegExp(`(?:${c_quoted_quote}|(?:(?!')${nb_json}))`));
+    i096 = function() {
+      return [single_quoted_escaped_single_quote] = r(/''/);
+    };
 
     // [119]
-    // ns-single-char ::=
-    //   nb-single-char - s-white
-    [ns_single_char] = r(RegExp(`(?:(?!${s_white})${nb_single_char})`));
+    // comment-content ::=
+    //   '#'
+    //   non-break-character*
+    comment_content = '';
 
-    [
-      ,
-      // [122]
-      // nb-single-one-line ::=
-      //   nb-single-char*
-      re_nb_single_one_line
-    ] = r(RegExp(`${nb_single_char}*`));
+    i119 = function() {
+      return [comment_content] = r(RegExp(`(?:\\x23${non_break_character}*)`, "u"));
+    };
 
-    // [123]
-    // nb-ns-single-in-line ::=
-    //   ( s-white* ns-single-char )*
-    [nb_ns_single_in_line, re_nb_ns_single_in_line] = r(RegExp(`(?:${s_white}*${ns_single_char})*`));
+    // [122]
+    // separation-lines(n) ::=
+    //     (
+    //       comment-lines
+    //       indentation-spaces-plus-maybe-more(n)
+    //     )
+    //   | separation-blanks
+    [separation_lines, re_separation_lines] = [];
 
-    [
-      ,
-      // [124]
-      // s-single-next-line(n) ::=
-      //   s-flow-folded(n)
-      //   ( ns-single-char nb-ns-single-in-line
-      //   ( s-single-next-line(n) | s-white* ) )?
-      re_s_single_next_line
-    ] = r(RegExp(`${ns_single_char}${nb_ns_single_in_line}`));
+    i123 = function() {
+      return [separation_lines, re_separation_lines] = r(RegExp(`(?:${blank_character}+|${start_of_line})`));
+    };
 
-    [
-      ,
-      // [128]
-      // ns-plain-safe-out ::=
-      //   ns-char
-      re_ns_plain_safe_out
-    ] = r(RegExp(`(?:${ns_char})`, "u"));
+    // [127]
+    // directive-name ::=
+    //   non-space-character+
+    directive_name = '';
 
-    [
-      ,
-      // [129]
-      // ns-plain-safe-in ::=
-      //   ns-char - c-flow-indicator
-      re_ns_plain_safe_in
-    ] = r(RegExp(`(?:(?!${c_flow_indicator})${ns_char})`, "u"));
+    i127 = function() {
+      return [directive_name] = r(RegExp(`${non_space_character}+`, "u"));
+    };
 
-    [
-      ,
-      // [169]
-      // l-trail-comments(n) ::=
-      //   s-indent(<n)
-      //   c-nb-comment-text b-comment
-      //   l-comment*
-      re_l_trail_comments
-    ] = r(RegExp(`${c_nb_comment_text}${b_comment}`, "u"));
+    // [128]
+    // directive-parameter ::=
+    //   non-space-character+
+    directive_parameter = '';
 
-    for (i = 0, len = init.length; i < len; i++) {
-      func = init[i];
-      func();
+    i128 = function() {
+      return [directive_parameter] = r(RegExp(`${non_space_character}+`, "u"));
+    };
+
+    // [130]
+    // tag-handle ::=
+    //     named-tag-handle
+    //   | secondary-tag-handle
+    //   | primary-tag-handle
+    [tag_handle, re_tag_handle] = [];
+
+    i130 = function() {
+      return [tag_handle, re_tag_handle] = r(RegExp(`(?:${named_tag_handle}|${secondary_tag_handle}|${primary_tag_handle})`));
+    };
+
+    // [131]
+    // named-tag-handle ::=
+    //   '!'
+    //   word-character+
+    //   '!'
+    named_tag_handle = '';
+
+    i131 = function() {
+      return [named_tag_handle] = r(RegExp(`!${word_character}+!`));
+    };
+
+    // [132]
+    // secondary-tag-handle ::=
+    //   "!!"
+    secondary_tag_handle = '';
+
+    i132 = function() {
+      return secondary_tag_handle = "!!";
+    };
+
+    // [133]
+    // primary-tag-handle ::=
+    //   '!'
+    primary_tag_handle = '';
+
+    i133 = function() {
+      return primary_tag_handle = "!";
+    };
+
+    // [135]
+    // local-tag-prefix ::=
+    //   '!'
+    //   uri-character*
+    local_tag_prefix = '';
+
+    i135 = function() {
+      return [local_tag_prefix] = r(RegExp(`!${uri_character}*`));
+    };
+
+    // [136]
+    // global-tag-prefix ::=
+    //   tag-character
+    //   uri-character*
+    global_tag_prefix = '';
+
+    i136 = function() {
+      return [global_tag_prefix] = r(RegExp(`${tag_char}${uri_character}*`));
+    };
+
+    // [139]
+    // anchor-name ::=
+    //   anchor-character+
+    anchor_name = '';
+
+    i139 = function() {
+      return [anchor_name] = r(RegExp(`(?:${anchor_character})+`, "u"));
+    };
+
+    // [140]
+    // anchor-character ::=
+    //     non-space-character
+    //   - flow-collection-indicators
+    anchor_character = '';
+
+    i140 = function() {
+      return [anchor_character] = r(RegExp(`(?:(?!${flow_collection_indicator})${non_space_character})+`, "u"));
+    };
+
+    // [142]
+    // verbatim-tag ::=
+    //   "!<"
+    //   uri-character+
+    //   '>'
+    verbatim_tag = '';
+
+    i142 = function() {
+      return [verbatim_tag] = r(RegExp(`(?:!<${uri_character}+>)`));
+    };
+
+    // [143]
+    // shorthand-tag ::=
+    //   tag-handle
+    //   tag-character+
+    shorthand_tag = '';
+
+    i143 = function() {
+      return [shorthand_tag] = r(RegExp(`(${tag_handle}${tag_char}+)`));
+    };
+
+    // [144]
+    // non-specific-tag ::=
+    //   '!'
+    non_specific_tag = "!";
+
+    // [145]
+    // byte-order-mark ::=
+    //   xFEFF
+    byte_order_mark = '';
+
+    i145 = function() {
+      return byte_order_mark = "\u{FEFF}";
+    };
+
+    // [146]
+    // yaml-character ::=
+    //                                     # 8 bit
+    //     x09                             # Tab
+    //   | x0A                             # Line feed
+    //   | x0D                             # Carriage return
+    //   | [x20-x7E]                       # Printable ASCII
+    //                                     # 16 bit
+    //   | x85                             # Next line (NEL)
+    //   | [xA0-xD7FF]                     # Basic multilingual plane (BMP)
+    //   | [xE000-xFFFD]                   # Additional unicode areas
+    //   | [x010000-x10FFFF]               # 32 bit
+    yaml_character = '';
+
+    i146 = function() {
+      return [yaml_character] = r(/[\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u);
+    };
+
+    // [147]
+    // json-character ::=
+    //     x09                             # Tab
+    //   | [x20-x10FFFF]                   # Non-C0-control characters
+    json_character = '';
+
+    i147 = function() {
+      return [json_character] = r(/[\x09\x20-\u{10FFFF}]/u);
+    };
+
+    // [148]
+    // non-space-character ::=
+    //     non-break-character
+    //   - blank-character
+    [non_space_character, re_non_space_character] = [];
+
+    i148 = function() {
+      return [non_space_character, re_non_space_character] = r(RegExp(`(?:(?!${blank_character})${non_break_character})`, "u"));
+    };
+
+    // [149]
+    // non-break-character ::=
+    //     yaml-character
+    //   - x0A
+    //   - x0D
+    //   - byte-order-mark
+    [non_break_character, re_non_break_character] = [];
+
+    i149 = function() {
+      return [non_break_character, re_non_break_character] = r(RegExp(`(?:(?![\\x0A\\x0D${byte_order_mark}])${yaml_character})`, "u"));
+    };
+
+    // [150]
+    // blank-character ::=
+    //     x20                             # Space
+    //   | x09                             # Tab
+    [blank_character, ws_lookahead] = [];
+
+    i150 = function() {
+      [blank_character] = r(RegExp(`[${space_character}\\t]`));
+      return [ws_lookahead] = r(RegExp(`(?=${end_of_file}|${blank_character}|${line_break})`));
+    };
+
+    // [151]
+    // space-character ::=
+    //   x20
+    space_character = '';
+
+    i151 = function() {
+      return space_character = "\x20";
+    };
+
+    // [152]
+    // line-ending ::=
+    //     line-break
+    //   | <end-of-input>
+    [line_ending, re_line_ending] = [];
+
+    i152 = function() {
+      return [line_ending, re_line_ending] = r(RegExp(`(?:${line_break}|${end_of_file})`));
+    };
+
+    // [153]
+    // break-as-space ::=
+    //   line-break
+    re_break_as_space = '';
+
+    i153 = function() {
+      return re_break_as_space = re_line_break;
+    };
+
+    // [154]
+    // break-as-line-feed ::=
+    //   line-break
+    re_break_as_line_feed = '';
+
+    i154 = function() {
+      return re_break_as_line_feed = re_line_break;
+    };
+
+    // [155]
+    // line-break ::=
+    //     (
+    //       x0D                           # Carriage return
+    //       x0A                           # Line feed
+    //     )
+    //   | x0D
+    //   | x0A
+    [line_break, re_line_break] = [];
+
+    i155 = function() {
+      return [line_break, re_line_break] = r(/(?:(?:\x0D\x0A)|\x0D|\x0A)/);
+    };
+
+    // XXX Rename to flow-collection-indicator
+    // [156]
+    // flow-collection-indicators ::=
+    //     '{'                             # Flow mapping start
+    //   | '}'                             # Flow mapping end
+    //   | '['                             # Flow sequence start
+    //   | ']'                             # Flow sequence end
+
+      // [156] 023
+    // c-flow-indicator ::=
+    //   ',' | '[' | ']' | '{' | '}'
+    [flow_collection_indicator, flow_collection_indicator_s] = [];
+
+    i156 = function() {
+      return [flow_collection_indicator, , flow_collection_indicator_s] = r(/[,[\]{}]/);
+    };
+
+    // [157]
+    // double-quoted-scalar-escape-character ::=
+    //   '\'
+    //   (
+    //       '0'
+    //     | 'a'
+    //     | 'b'
+    //     | 't' | x09
+    //     | 'n'
+    //     | 'v'
+    //     | 'f'
+    //     | 'r'
+    //     | 'e'
+    //     | x20
+    //     | '"'
+    //     | '/'
+    //     | '\'
+    //     | 'N'
+    //     | '_'
+    //     | 'L'
+    //     | 'P'
+    //     | ( 'x' hexadecimal-digit{2} )
+    //     | ( 'u' hexadecimal-digit{4} )
+    //     | ( 'U' hexadecimal-digit{8} )
+    //   )
+    double_quoted_scalar_escape_character = '';
+
+    i157 = function() {
+      return [double_quoted_scalar_escape_character] = r(RegExp(`\\\\(?:[0abt\\tnvfre\\x20"/\\\\N_LP]|x${hexadecimal_digit}{2}|u${hexadecimal_digit}{4}|U${hexadecimal_digit}{8})`));
+    };
+
+    // [158]
+    // tag-character ::=
+    //     uri-character
+    //   - '!'
+    //   - flow-collection-indicators
+    tag_char = '';
+
+    i158 = function() {
+      return [tag_char] = r(RegExp(`(?:(?![!${flow_collection_indicator_s}])${uri_character})`));
+    };
+
+    // [159]
+    // uri-character ::=
+    //     (
+    //       '%'
+    //       hexadecimal-digit{2}
+    //     )
+    //   | word-character
+    //   | '#'
+    //   | ';'
+    //   | '/'
+    //   | '?'
+    //   | ':'
+    //   | '@'
+    //   | '&'
+    //   | '='
+    //   | '+'
+    //   | '$'
+    //   | ','
+    //   | '_'
+    //   | '.'
+    //   | '!'
+    //   | '~'
+    //   | '*'
+    //   | "'"
+    //   | '('
+    //   | ')'
+    //   | '['
+    //   | ']'
+    uri_character = '';
+
+    i159 = function() {
+      return [uri_character] = r(RegExp(`(?:%${hexadecimal_digit}{2}|[${word_character_s}\\x23;/?:@&=+$,_.!~*'()[\\]])`));
+    };
+
+    // [160]
+    // word-character ::=
+    //     decimal-digit
+    //   | ascii-alpha-character
+    //   | '-'
+    [word_character, , word_character_s] = [];
+
+    i160 = function() {
+      return [word_character, , word_character_s] = r(RegExp(`[${decimal_digit_s}${ascii_alpha_character_s}\\-]`));
+    };
+
+    // [161]
+    // hexadecimal-digit ::=
+    //     decimal-digit
+    //   | [x41-x46]                       # A-F
+    //   | [x61-x66]                       # a-f
+    hexadecimal_digit = '';
+
+    i161 = function() {
+      return [hexadecimal_digit] = r(RegExp(`[${decimal_digit_s}A-Fa-f]`));
+    };
+
+    // [162]
+    // decimal-digit ::=
+    //   [x30-x39]                         # 0-9
+    [decimal_digit, decimal_digit_s] = [];
+
+    i162 = function() {
+      return [decimal_digit, , decimal_digit_s] = r(/[0-9]/);
+    };
+
+    // [163]
+    // decimal-digit-1-9 ::=
+    //   [x31-x39]                         # 0-9
+    re_decimal_digit_1_9 = '';
+
+    i163 = function() {
+      return [re_decimal_digit_1_9] = r(/[0-9]/);
+    };
+
+    // [164]
+    // ascii-alpha-character ::=
+    //     [x41-x5A]                       # A-Z
+    //   | [x61-x7A]                       # a-z
+    ascii_alpha_character_s = '';
+
+    i164 = function() {
+      return [, , ascii_alpha_character_s] = r(/[A-Za-z]/);
+    };
+
+    ref = [i146, i147, i145, i156, i155, i154, i162, i163, i151, i150, i149, i148, i161, i164, i160, i159, i158, i157, i153, i152, i123, i133, i132, i131, i130, i135, i136, i142, i143, i140, i139, i128, i127, i119, i051, i096, i095, i094, i091, i092, i093, i084, i083, i081, i080, i004];
+    for (i = 0, len = ref.length; i < len; i++) {
+      init = ref[i];
+      // Call the variable initialization functions in the order needed for
+      // JavaScript to be correct.
+      init();
     }
 
     return Grammar;
