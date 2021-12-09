@@ -3,7 +3,7 @@
   var Grammar;
 
   global.Grammar = Grammar = (function() {
-    var anchor_character, anchor_name, ascii_alpha_character_s, blank_character, byte_order_mark, comment_content, decimal_digit, decimal_digit_s, directive_name, directive_parameter, document_end_indicator, document_start_indicator, double_quoted_scalar_escape_character, end_of_file, flow_collection_indicator, flow_collection_indicator_s, global_tag_prefix, hexadecimal_digit, i, i004, i051, i083, i084, i091, i092, i093, i094, i095, i096, i118b, i119, i123, i127, i128, i130, i131, i132, i133, i135, i136, i139, i140, i142, i143, i145, i146, i147, i148, i149, i150, i151, i152, i153, i154, i155, i156, i157, i158, i159, i160, i161, i162, i163, i164, init, json_character, l_comment, len, line_break, line_ending, local_tag_prefix, named_tag_handle, non_break_character, non_break_double_quoted_character, non_break_single_quoted_character, non_space_character, non_space_double_quoted_character, non_space_single_quoted_character, non_specific_tag, primary_tag_handle, r, re_break_as_line_feed, re_break_as_space, re_decimal_digit_1_9, re_document_end_indicator, re_document_start_indicator, re_l_comment, re_line_break, re_line_ending, re_line_trail_comments, re_non_break_character, re_non_space_character, re_non_space_double_quoted_character, re_separation_blanks, re_single_quoted_first_line, re_single_quoted_next_line, re_single_quoted_one_line, re_tag_handle, re_ws_lookahead, ref, secondary_tag_handle, separation_blanks, shorthand_tag, single_quoted_escaped_single_quote, single_quoted_first_line, space_character, start_of_line, tag_char, tag_handle, uri_character, verbatim_tag, word_character, word_character_s, ws_lookahead, yaml_character;
+    var anchor_character, anchor_name, ascii_alpha_character_s, blank_character, blanks_and_comment_line, byte_order_mark, comment_content, comment_line, decimal_digit, decimal_digit_s, directive_name, directive_parameter, document_end_indicator, document_start_indicator, double_quoted_scalar_escape_character, end_of_input, flow_collection_indicator, flow_collection_indicator_s, global_tag_prefix, hexadecimal_digit, i, id, init, inits, json_character, len, line_break, line_ending, local_tag_prefix, named_tag_handle, non_break_character, non_break_double_quoted_character, non_break_single_quoted_character, non_space_character, non_space_double_quoted_character, non_space_single_quoted_character, non_specific_tag, primary_tag_handle, re_blanks_and_comment_line, re_break_as_line_feed, re_break_as_space, re_comment_line, re_decimal_digit_1_9, re_document_end_indicator, re_document_start_indicator, re_line_break, re_line_ending, re_line_trail_comments, re_non_break_character, re_non_space_character, re_non_space_double_quoted_character, re_separation_blanks, re_single_quoted_first_line, re_single_quoted_next_line, re_single_quoted_one_line, re_tag_handle, re_ws_lookahead, ref, regx, secondary_tag_handle, separation_blanks, shorthand_tag, single_quoted_escaped_single_quote, single_quoted_first_line, space_character, start_of_line, tag_char, tag_handle, uri_character, verbatim_tag, word_character, word_character_s, ws_lookahead, yaml_character;
 
     class Grammar {
       // Grammar rules:
@@ -26,25 +26,23 @@
       //     | start-indicator-and-document
       //   )*
       yaml_stream() {
-        return this.all(this.document_prefix, this.rep(0, 1, this.any_document), this.rep(0, null, this.any(this.all(this.document_suffix, this.rep(0, null, this.document_prefix), this.rep(0, 1, this.any_document)), this.all(this.document_prefix, this.rep(0, 1, this.start_indicator_and_document)))));
+        return this.all(this.rep('*', this.document_prefix), this.rep('?', this.any_document), this.rep('*', this.any(this.all(this.rep('+', this.document_suffix), this.rep('*', this.document_prefix), this.rep('?', this.any_document)), this.byte_order_mark, this.comment_line, this.start_indicator_and_document)));
       }
 
       // [002]
       // document-prefix ::=
       //   byte-order-mark?
-      //   comment-line*
+      //   blanks-and-comment-line*
 
         // TODO
-      //   re_document_prefix = ''
-
-      //   i002 = ->
-      //     [, re_document_prefix] = r ///
+      //   [    re_document_prefix] = init 'x???', ->
+      //     [, re_document_prefix] = regx ///
       //       #{byte_order_mark}?
-      //       #{l_comment}*
+      //       #{blanks_and_comment_line}*
       //     ///u
       document_prefix() {
         //     @rgx(re_document_prefix)
-        return this.all(this.rep(0, 1, this.chr(byte_order_mark)), this.rep(0, null, this.comment_line));
+        return this.all(this.rep('?', this.byte_order_mark), this.rep('*', this.blanks_and_comment_line));
       }
 
       // [003]
@@ -55,10 +53,16 @@
         return this.all(this.document_end_indicator, this.comment_lines);
       }
 
+      // [004]
+      // document-start-indicator ::=
+      //   "---"
       document_start_indicator() {
         return this.rgx(re_document_start_indicator);
       }
 
+      // [005]
+      // document-end-indicator ::=
+      //   "..."                             # Not followed by non-ws char
       document_end_indicator() {
         return this.rgx(re_document_end_indicator);
       }
@@ -77,7 +81,7 @@
       //   directive-line+
       //   start-indicator-and-document
       directives_and_document() {
-        return this.all(this.rep(1, null, this.directive_line), this.start_indicator_and_document);
+        return this.all(this.rep('+', this.directive_line), this.start_indicator_and_document);
       }
 
       // [008]
@@ -99,7 +103,7 @@
       //   block-node(-1,BLOCK-IN)
       //   /* Excluding forbidden-content */
       bare_document() {
-        return this.all(this.exclude(this.forbidden_content), [this.block_node, -1, "block-in"]);
+        return this.all(this.exclude(this.forbidden_content), [this.block_node, -1, "BLOCK-IN"]);
       }
 
       // [010]
@@ -128,7 +132,7 @@
       //   )
       forbidden_content() {
         return this.rgx(RegExp(`(?:${start_of_line // XXX slightly different than 1.3 spec
-}(?:${document_start_indicator}|${document_end_indicator})(?:[\\x0A\\x0D]|${blank_character}|${end_of_file}))`, "y"));
+}(?:${document_start_indicator}|${document_end_indicator})(?:[\\x0A\\x0D]|${blank_character}|${end_of_input}))`, "y"));
       }
 
       // [012]
@@ -153,7 +157,7 @@
       //   flow-node(n+1,FLOW-OUT)
       //   comment-lines
       flow_node_in_a_block_node(n) {
-        return this.all([this.separation_characters, n + 1, "flow-out"], [this.flow_node, n + 1, "flow-out"], this.comment_lines);
+        return this.all([this.separation_characters, n + 1, "FLOW-OUT"], [this.flow_node, n + 1, "FLOW-OUT"], this.comment_lines);
       }
 
       // [015]
@@ -169,7 +173,7 @@
       //   )
       block_collection(n, c) {
         // XXX Needed by receiver to get only a tag or anchor:
-        return this.all(this.rep(0, 1, this.all([this.separation_characters, n + 1, c], this.any(this.all([this.node_properties, n + 1, c], this.comment_lines), this.all(this.tag_property, this.comment_lines), this.all(this.anchor_property, this.comment_lines)))), this.comment_lines, this.any([this.block_sequence_context, n, c], [this.block_mapping, n]));
+        return this.all(this.rep('?', this.all([this.separation_characters, n + 1, c], this.any(this.all([this.node_properties, n + 1, c], this.comment_lines), this.all(this.tag_property, this.comment_lines), this.all(this.anchor_property, this.comment_lines)))), this.comment_lines, this.any([this.block_sequence_context, n, c], [this.block_mapping, n]));
       }
 
       // [016]
@@ -177,8 +181,8 @@
       // block-sequence-context(n,BLOCK-IN)  ::= block-sequence(n)
       block_sequence_context(n, c) {
         return this.case(c, {
-          'block-out': [this.block_sequence, this.sub(n, 1)],
-          'block-in': [this.block_sequence, n]
+          'BLOCK-OUT': [this.block_sequence, this.sub(n, 1)],
+          'BLOCK-IN': [this.block_sequence, n]
         });
       }
 
@@ -194,7 +198,7 @@
       //     | block-folded-scalar(n)
       //   )
       block_scalar(n, c) {
-        return this.all([this.separation_characters, n + 1, c], this.rep(0, 1, this.all([this.node_properties, n + 1, c], [this.separation_characters, n + 1, c])), this.any([this.block_literal_scalar, n], [this.block_folded_scalar, n]));
+        return this.all([this.separation_characters, n + 1, c], this.rep('?', this.all([this.node_properties, n + 1, c], [this.separation_characters, n + 1, c])), this.any([this.block_literal_scalar, n], [this.block_folded_scalar, n]));
       }
 
       // [018]
@@ -208,7 +212,7 @@
         if (!(m = this.call([this.auto_detect_indent, n], 'number'))) {
           return false;
         }
-        return this.all(this.rep(1, null, this.all(this.indentation_spaces_n(n + m), [this.block_mapping_entry, n + m])));
+        return this.all(this.rep('+', this.all(this.indentation_spaces_n(n + m), [this.block_mapping_entry, n + m])));
       }
 
       // [019]
@@ -235,7 +239,7 @@
       //   '?'                               # Not followed by non-ws char
       //   block-indented-node(n,BLOCK-OUT)
       block_mapping_explicit_key(n) {
-        return this.all(this.rgx(RegExp(`\\?${ws_lookahead}`, "y")), [this.block_indented_node, n, "block-out"]);
+        return this.all(this.rgx(RegExp(`\\?${ws_lookahead}`, "y")), [this.block_indented_node, n, "BLOCK-OUT"]);
       }
 
       // [022]
@@ -244,7 +248,7 @@
       //   ':'                               # Not followed by non-ws char
       //   block-indented-node(n,BLOCK-OUT)
       block_mapping_explicit_value(n) {
-        return this.all(this.indentation_spaces_n(n), this.rgx(RegExp(`:${ws_lookahead}`, "y")), [this.block_indented_node, n, "block-out"]);
+        return this.all(this.indentation_spaces_n(n), this.rgx(RegExp(`:${ws_lookahead}`, "y")), [this.block_indented_node, n, "BLOCK-OUT"]);
       }
 
       // [023]
@@ -264,7 +268,7 @@
       //     implicit-json-key(BLOCK-KEY)
       //   | implicit-yaml-key(BLOCK-KEY)
       block_mapping_implicit_key() {
-        return this.any([this.implicit_json_key, "block-key"], [this.implicit_yaml_key, "block-key"]);
+        return this.any([this.implicit_json_key, "BLOCK-KEY"], [this.implicit_yaml_key, "BLOCK-KEY"]);
       }
 
       // [025]
@@ -278,7 +282,7 @@
       //       )
       //   )
       block_mapping_implicit_value(n) {
-        return this.all(this.rgx(RegExp(`:${ws_lookahead}`, "y")), this.any([this.block_node, n, "block-out"], this.all(this.empty_node, this.comment_lines)));
+        return this.all(this.rgx(RegExp(`:${ws_lookahead}`, "y")), this.any([this.block_node, n, "BLOCK-OUT"], this.all(this.empty_node, this.comment_lines)));
       }
 
       // [026]
@@ -289,7 +293,7 @@
       //     block-mapping-entry(n)
       //   )*
       compact_mapping(n) {
-        return this.all([this.block_mapping_entry, n], this.rep(0, null, this.all(this.indentation_spaces_n(n), [this.block_mapping_entry, n])));
+        return this.all([this.block_mapping_entry, n], this.rep('*', this.all(this.indentation_spaces_n(n), [this.block_mapping_entry, n])));
       }
 
       // [027]
@@ -303,7 +307,7 @@
         if (!(m = this.call([this.auto_detect_indent, n], 'number'))) {
           return false;
         }
-        return this.all(this.rep(1, null, this.all(this.indentation_spaces_n(n + m), [this.block_sequence_entry, n + m])));
+        return this.all(this.rep('+', this.all(this.indentation_spaces_n(n + m), [this.block_sequence_entry, n + m])));
       }
 
       // [028]
@@ -312,7 +316,7 @@
       //   [ lookahead ≠ non-space-character ]
       //   block-indented-node(n,BLOCK-IN)
       block_sequence_entry(n) {
-        return this.all(this.rgx(RegExp(`-${ws_lookahead}(?!${non_space_character})`, "yu")), [this.block_indented_node, n, "block-in"]);
+        return this.all(this.rgx(RegExp(`-${ws_lookahead}(?!${non_space_character})`, "yu")), [this.block_indented_node, n, "BLOCK-IN"]);
       }
 
       // [029]
@@ -343,7 +347,7 @@
       //     block-sequence-entry(n)
       //   )*
       compact_sequence(n) {
-        return this.all([this.block_sequence_entry, n], this.rep(0, null, this.all(this.indentation_spaces_n(n), [this.block_sequence_entry, n])));
+        return this.all([this.block_sequence_entry, n], this.rep('*', this.all(this.indentation_spaces_n(n), [this.block_sequence_entry, n])));
       }
 
       // [031]
@@ -364,7 +368,7 @@
       //   )?
       //   block-scalar-chomp-empty(n,t)
       literal_scalar_content(n, t) {
-        return this.all(this.rep(0, 1, this.all([this.literal_scalar_line_content, n], this.rep(0, null, [this.literal_scalar_next_line, n]), [this.block_scalar_chomp_last, t])), [this.block_scalar_chomp_empty, n, t]);
+        return this.all(this.rep('?', this.all([this.literal_scalar_line_content, n], this.rep('*', [this.literal_scalar_next_line, n]), [this.block_scalar_chomp_last, t])), [this.block_scalar_chomp_empty, n, t]);
       }
 
       // [033]
@@ -374,7 +378,7 @@
       //   non-break-character+
       literal_scalar_line_content(n) {
         // XXX @all used to disambiguate @rgx capture:
-        return this.all(this.rep(0, null, [this.empty_line, n, "block-in"]), this.indentation_spaces_n(n), this.all(this.rgx(RegExp(`${non_break_character}+`, "yu"))));
+        return this.all(this.rep('*', [this.empty_line, n, "BLOCK-IN"]), this.indentation_spaces_n(n), this.all(this.rgx(RegExp(`${non_break_character}+`, "yu"))));
       }
 
       // [034]
@@ -382,7 +386,7 @@
       //   break-as-line-feed
       //   literal-scalar-line-content(n)
       literal_scalar_next_line(n) {
-        return this.all(this.rgx(re_break_as_line_feed), [this.literal_scalar_line_content, n]);
+        return this.all(this.break_as_line_feed, [this.literal_scalar_line_content, n]);
       }
 
       // [035]
@@ -402,7 +406,7 @@
       //   )?
       //   block-scalar-chomp-empty(n,t)
       folded_scalar_content(n, t) {
-        return this.all(this.rep(0, 1, this.all([this.folded_scalar_lines_different_indentation, n], [this.block_scalar_chomp_last, t])), [this.block_scalar_chomp_empty, n, t]);
+        return this.all(this.rep('?', this.all([this.folded_scalar_lines_different_indentation, n], [this.block_scalar_chomp_last, t])), [this.block_scalar_chomp_empty, n, t]);
       }
 
       // [037]
@@ -413,7 +417,7 @@
       //     folded-scalar-lines-same-indentation(n)
       //   )*
       folded_scalar_lines_different_indentation(n) {
-        return this.all([this.folded_scalar_lines_same_indentation, n], this.rep(0, null, this.all(this.rgx(re_break_as_line_feed), [this.folded_scalar_lines_same_indentation, n])));
+        return this.all([this.folded_scalar_lines_same_indentation, n], this.rep('*', this.all(this.break_as_line_feed, [this.folded_scalar_lines_same_indentation, n])));
       }
 
       // [038]
@@ -424,7 +428,7 @@
       //     | folded-scalar-spaced-lines(n)
       //   )
       folded_scalar_lines_same_indentation(n) {
-        return this.all(this.rep(0, null, [this.empty_line, n, "block-in"]), this.any([this.folded_scalar_lines, n], [this.folded_scalar_spaced_lines, n]));
+        return this.all(this.rep('*', [this.empty_line, n, "BLOCK-IN"]), this.any([this.folded_scalar_lines, n], [this.folded_scalar_spaced_lines, n]));
       }
 
       // [039]
@@ -435,7 +439,7 @@
       //     folded-scalar-text(n)
       //   )*
       folded_scalar_lines(n) {
-        return this.all([this.folded_scalar_text, n], this.rep(0, null, this.all([this.folded_whitespace, n, "block-in"], [this.folded_scalar_text, n])));
+        return this.all([this.folded_scalar_text, n], this.rep('*', this.all([this.folded_whitespace, n, "BLOCK-IN"], [this.folded_scalar_text, n])));
       }
 
       // [040]
@@ -446,7 +450,7 @@
       //     folded-scalar-spaced-text(n)
       //   )*
       folded_scalar_spaced_lines(n) {
-        return this.all([this.folded_scalar_spaced_text, n], this.rep(0, null, this.all([this.line_break_and_empty_lines, n], [this.folded_scalar_spaced_text, n])));
+        return this.all([this.folded_scalar_spaced_text, n], this.rep('*', this.all([this.line_break_and_empty_lines, n], [this.folded_scalar_spaced_text, n])));
       }
 
       // [041]
@@ -464,7 +468,7 @@
       //   break-as-line-feed
       //   empty-line(n,BLOCK-IN)*
       line_break_and_empty_lines(n) {
-        return this.all(this.rgx(re_break_as_line_feed), this.rep(0, null, [this.empty_line, n, "block-in"]));
+        return this.all(this.break_as_line_feed, this.rep('*', [this.empty_line, n, "BLOCK-IN"]));
       }
 
       // [043]
@@ -488,10 +492,7 @@
       //         block-scalar-indentation-indicator
       //       )
       //   )
-      //   (
-      //       comment-line
-      //     | line-ending
-      //   )
+      //   comment-line
       block_scalar_indicator(n) {
         return this.all(this.any(this.all([this.block_scalar_indentation_indicator, n], this.block_scalar_chomping_indicator, this.ws_lookahead), this.all(this.block_scalar_chomping_indicator, [this.block_scalar_indentation_indicator, n], this.ws_lookahead)), this.comment_line);
       }
@@ -508,7 +509,7 @@
       // block-scalar-chomping-indicator(KEEP)  ::= '+'
       // block-scalar-chomping-indicator(CLIP)  ::= ""
       block_scalar_chomping_indicator() {
-        return this.any(this.if(this.chr('-'), this.set('t', "strip")), this.if(this.chr('+'), this.set('t', "keep")), this.if(this.empty, this.set('t', "clip")));
+        return this.any(this.if(this.chr('-'), this.set('t', "STRIP")), this.if(this.chr('+'), this.set('t', "KEEP")), this.if(this.empty, this.set('t', "CLIP")));
       }
 
       // [047]
@@ -517,9 +518,9 @@
       // block-scalar-chomp-last(KEEP)  ::= break-as-line-feed | <end-of-input>
       block_scalar_chomp_last(t) {
         return this.case(t, {
-          'clip': this.any(this.rgx(re_break_as_line_feed), this.end_of_stream),
-          'keep': this.any(this.rgx(re_break_as_line_feed), this.end_of_stream),
-          'strip': this.any(this.rgx(re_line_break), this.end_of_stream)
+          'CLIP': this.any(this.break_as_line_feed, this.end_of_input),
+          'KEEP': this.any(this.break_as_line_feed, this.end_of_input),
+          'STRIP': this.any(this.rgx(re_line_break), this.end_of_input)
         });
       }
 
@@ -529,9 +530,9 @@
       //   block-scalar-chomp-empty(n,KEEP)  ::= line-keep-empty(n)
       block_scalar_chomp_empty(n, t) {
         return this.case(t, {
-          'strip': [this.line_strip_empty, n],
-          'clip': [this.line_strip_empty, n],
-          'keep': [this.line_keep_empty, n]
+          'STRIP': [this.line_strip_empty, n],
+          'CLIP': [this.line_strip_empty, n],
+          'KEEP': [this.line_keep_empty, n]
         });
       }
 
@@ -543,7 +544,7 @@
       //   )*
       //   line-trail-comments(n)?
       line_strip_empty(n) {
-        return this.all(this.rep(0, null, this.all([this.indentation_spaces_less_or_equal, n], this.rgx(re_line_break))), this.rep(0, 1, [this.line_trail_comments, n]));
+        return this.all(this.rep('*', this.all([this.indentation_spaces_less_or_equal, n], this.rgx(re_line_break))), this.rep('?', [this.line_trail_comments, n]));
       }
 
       // [050]
@@ -551,11 +552,17 @@
       //   empty-line(n,BLOCK-IN)*
       //   line-trail-comments(n)?
       line_keep_empty(n) {
-        return this.all(this.rep(0, null, [this.empty_line, n, "block-in"]), this.rep(0, 1, [this.line_trail_comments, n]));
+        return this.all(this.rep('*', [this.empty_line, n, "BLOCK-IN"]), this.rep('?', [this.line_trail_comments, n]));
       }
 
+      // [051]
+      // line-trail-comments(n) ::=
+      //   indentation-spaces-less-than(n)
+      //   comment-content
+      //   line-ending
+      //   comment-line*
       line_trail_comments(n) {
-        return this.all([this.indentation_spaces_less_than, n], this.rgx(re_line_trail_comments), this.rep(0, null, this.l_comment));
+        return this.all([this.indentation_spaces_less_than, n], this.rgx(re_line_trail_comments), this.rep('*', this.comment_line));
       }
 
       // [052]
@@ -608,7 +615,7 @@
       //   flow-mapping-context(n,c)?
       //   '}'
       flow_mapping(n, c) {
-        return this.all(this.chr('{'), this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, [this.flow_mapping_context, n, c]), this.chr('}'));
+        return this.all(this.chr('{'), this.rep('?', [this.separation_characters, n, c]), this.rep('?', [this.flow_mapping_context, n, c]), this.chr('}'));
       }
 
       // [057]
@@ -621,7 +628,7 @@
       //     flow-mapping-entries(n,c)?
       //   )?
       flow_mapping_entries(n, c) {
-        return this.all([this.flow_mapping_entry, n, c], this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, this.all(this.chr(','), this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, [this.flow_mapping_entries, n, c]))));
+        return this.all([this.flow_mapping_entry, n, c], this.rep('?', [this.separation_characters, n, c]), this.rep('?', this.all(this.chr(','), this.rep('?', [this.separation_characters, n, c]), this.rep('?', [this.flow_mapping_entries, n, c]))));
       }
 
       // [058]
@@ -636,7 +643,7 @@
         return this.any(this.all(this.rgx(RegExp(`\\?${ws_lookahead}`, "y")), [this.separation_characters, n, c], [this.flow_mapping_explicit_entry, n, c]), [this.flow_mapping_implicit_entry, n, c]);
       }
 
-      // [59]
+      // [059]
       // flow-mapping-explicit-entry(n,c) ::=
       //     flow-mapping-implicit-entry(n,c)
       //   | (
@@ -647,7 +654,7 @@
         return this.any([this.flow_mapping_implicit_entry, n, c], this.all(this.empty_node, this.empty_node));
       }
 
-      // [60]
+      // [060]
       // flow-mapping-implicit-entry(n,c) ::=
       //     flow-mapping-yaml-key-entry(n,c)
       //   | flow-mapping-empty-key-entry(n,c)
@@ -656,7 +663,7 @@
         return this.any([this.flow_mapping_yaml_key_entry, n, c], [this.flow_mapping_empty_key_entry, n, c], [this.flow_mapping_json_key_entry, n, c]);
       }
 
-      // [61]
+      // [061]
       // flow-mapping-yaml-key-entry(n,c) ::=
       //   flow-yaml-node(n,c)
       //   (
@@ -667,10 +674,10 @@
       //     | empty-node
       //   )
       flow_mapping_yaml_key_entry(n, c) {
-        return this.all([this.flow_yaml_node, n, c], this.any(this.all(this.rep(0, 1, [this.separation_characters, n, c]), [this.flow_mapping_separate_value, n, c]), this.empty_node));
+        return this.all([this.flow_yaml_node, n, c], this.any(this.all(this.rep('?', [this.separation_characters, n, c]), [this.flow_mapping_separate_value, n, c]), this.empty_node));
       }
 
-      // [62]
+      // [062]
       // flow-mapping-empty-key-entry(n,c) ::=
       //   empty-node
       //   flow-mapping-separate-value(n,c)
@@ -678,7 +685,7 @@
         return this.all(this.empty_node, [this.flow_mapping_separate_value, n, c]);
       }
 
-      // [63]
+      // [063]
       // flow-mapping-separate-value(n,c) ::=
       //   ':'
       //   [ lookahead ≠ non-space-plain-scalar-character(c) ]
@@ -693,7 +700,7 @@
         return this.all(this.rgx(RegExp(`(?::(?!${this.non_space_plain_scalar_character(c)}))`, "yu")), this.any(this.all([this.separation_characters, n, c], [this.flow_node, n, c]), this.empty_node));
       }
 
-      // [64]
+      // [064]
       // flow-mapping-json-key-entry(n,c) ::=
       //   flow-json-node(n,c)
       //   (
@@ -704,10 +711,10 @@
       //     | empty-node
       //   )
       flow_mapping_json_key_entry(n, c) {
-        return this.all([this.flow_json_node, n, c], this.any(this.all(this.rep(0, 1, [this.separation_characters, n, c]), [this.flow_mapping_adjacent_value, n, c]), this.empty_node));
+        return this.all([this.flow_json_node, n, c], this.any(this.all(this.rep('?', [this.separation_characters, n, c]), [this.flow_mapping_adjacent_value, n, c]), this.empty_node));
       }
 
-      // [65]
+      // [065]
       // flow-mapping-adjacent-value(n,c) ::=
       //   ':'
       //   (
@@ -718,10 +725,10 @@
       //     | empty-node
       //   )
       flow_mapping_adjacent_value(n, c) {
-        return this.all(this.chr(':'), this.any(this.all(this.rep(0, 1, [this.separation_characters, n, c]), [this.flow_node, n, c]), this.empty_node));
+        return this.all(this.chr(':'), this.any(this.all(this.rep('?', [this.separation_characters, n, c]), [this.flow_node, n, c]), this.empty_node));
       }
 
-      // [66]
+      // [066]
       // flow-pair(n,c) ::=
       //     (
       //       '?'                           # Not followed by non-ws char
@@ -733,7 +740,7 @@
         return this.any(this.all(this.rgx(RegExp(`\\?${ws_lookahead}`)), [this.separation_characters, n, c], [this.flow_mapping_explicit_entry, n, c]), [this.flow_pair_entry, n, c]);
       }
 
-      // [67]
+      // [067]
       // flow-pair-entry(n,c) ::=
       //     flow-pair-yaml-key-entry(n,c)
       //   | flow-mapping-empty-key-entry(n,c)
@@ -742,41 +749,41 @@
         return this.any([this.flow_pair_yaml_key_entry, n, c], [this.flow_mapping_empty_key_entry, n, c], [this.flow_pair_json_key_entry, n, c]);
       }
 
-      // [68]
+      // [068]
       // flow-pair-yaml-key-entry(n,c) ::=
       //   implicit-yaml-key(FLOW-KEY)
       //   flow-mapping-separate-value(n,c)
       flow_pair_yaml_key_entry(n, c) {
-        return this.all([this.implicit_yaml_key, "flow-key"], [this.flow_mapping_separate_value, n, c]);
+        return this.all([this.implicit_yaml_key, "FLOW-KEY"], [this.flow_mapping_separate_value, n, c]);
       }
 
-      // [69]
+      // [069]
       // flow-pair-json-key-entry(n,c) ::=
       //   implicit-json-key(FLOW-KEY)
       //   flow-mapping-adjacent-value(n,c)
       flow_pair_json_key_entry(n, c) {
-        return this.all([this.implicit_json_key, "flow-key"], [this.flow_mapping_adjacent_value, n, c]);
+        return this.all([this.implicit_json_key, "FLOW-KEY"], [this.flow_mapping_adjacent_value, n, c]);
       }
 
-      // [70]
+      // [070]
       // implicit-yaml-key(c) ::=
       //   flow-yaml-node(0,c)
       //   separation-blanks?
       //   /* At most 1024 characters altogether */
       implicit_yaml_key(c) {
-        return this.all(this.max(1024), [this.flow_yaml_node, null, c], this.rep(0, 1, this.separation_blanks));
+        return this.all(this.max(1024), [this.flow_yaml_node, null, c], this.rep('?', this.separation_blanks));
       }
 
-      // [71]
+      // [071]
       // implicit-json-key(c) ::=
       //   flow-json-node(0,c)
       //   separation-blanks?
       //   /* At most 1024 characters altogether */
       implicit_json_key(c) {
-        return this.all(this.max(1024), [this.flow_json_node, null, c], this.rep(0, 1, this.separation_blanks));
+        return this.all(this.max(1024), [this.flow_json_node, null, c], this.rep('?', this.separation_blanks));
       }
 
-      // [72]
+      // [072]
       // flow-yaml-node(n,c) ::=
       //     alias-node
       //   | flow-yaml-content(n,c)
@@ -794,7 +801,7 @@
         return this.any(this.alias_node, [this.flow_yaml_content, n, c], this.all([this.node_properties, n, c], this.any(this.all([this.separation_characters, n, c], [this.flow_content, n, c]), this.empty_node)));
       }
 
-      // [73]
+      // [073]
       // flow-json-node(n,c) ::=
       //   (
       //     node-properties(n,c)
@@ -802,7 +809,7 @@
       //   )?
       //   flow-json-content(n,c)
       flow_json_node(n, c) {
-        return this.all(this.rep(0, 1, this.all([this.node_properties, n, c], [this.separation_characters, n, c])), [this.flow_json_content, n, c]);
+        return this.all(this.rep('?', this.all([this.node_properties, n, c], [this.separation_characters, n, c])), [this.flow_json_content, n, c]);
       }
 
       // [074]
@@ -812,7 +819,7 @@
       //   flow-sequence-context(n,c)?
       //   ']'
       flow_sequence(n, c) {
-        return this.all(this.chr('['), this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, [this.flow_sequence_context, n, c]), this.chr(']'));
+        return this.all(this.chr('['), this.rep('?', [this.separation_characters, n, c]), this.rep('?', [this.flow_sequence_context, n, c]), this.chr(']'));
       }
 
       // [075]
@@ -825,10 +832,10 @@
       //     flow-sequence-entries(n,c)?
       //   )?
       flow_sequence_entries(n, c) {
-        return this.all([this.flow_sequence_entry, n, c], this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, this.all(this.chr(','), this.rep(0, 1, [this.separation_characters, n, c]), this.rep(0, 1, [this.flow_sequence_entries, n, c]))));
+        return this.all([this.flow_sequence_entry, n, c], this.rep('?', [this.separation_characters, n, c]), this.rep('?', this.all(this.chr(','), this.rep('?', [this.separation_characters, n, c]), this.rep('?', [this.flow_sequence_entries, n, c]))));
       }
 
-      // [76]
+      // [076]
       // flow-sequence-entry(n,c) ::=
       //     flow-pair(n,c)
       //   | flow-node(n,c)
@@ -836,7 +843,7 @@
         return this.any([this.flow_pair, n, c], [this.flow_node, n, c]);
       }
 
-      // [77]
+      // [077]
       // double-quoted-scalar(n,c) ::=
       //   '"'
       //   double-quoted-text(n,c)
@@ -845,21 +852,21 @@
         return this.all(this.chr('"'), [this.double_quoted_text, n, c], this.chr('"'));
       }
 
-      // [78]
+      // [078]
       // double-quoted-text(n,BLOCK-KEY) ::= double-quoted-one-line
       // double-quoted-text(n,FLOW-KEY)  ::= double-quoted-one-line
       // double-quoted-text(n,FLOW-OUT)  ::= double-quoted-multi-line(n)
       // double-quoted-text(n,FLOW-IN)   ::= double-quoted-multi-line(n)
       double_quoted_text(n, c) {
         return this.case(c, {
-          'block-key': this.double_quoted_one_line,
-          'flow-in': [this.double_quoted_multi_line, n],
-          'flow-key': this.double_quoted_one_line,
-          'flow-out': [this.double_quoted_multi_line, n]
+          'BLOCK-KEY': this.double_quoted_one_line,
+          'FLOW-IN': [this.double_quoted_multi_line, n],
+          'FLOW-KEY': this.double_quoted_one_line,
+          'FLOW-OUT': [this.double_quoted_multi_line, n]
         });
       }
 
-      // [79]
+      // [079]
       // double-quoted-multi-line(n) ::=
       //   double-quoted-first-line
       //   (
@@ -867,17 +874,17 @@
       //     | blank-character*
       //   )
       double_quoted_multi_line(n) {
-        return this.all(this.double_quoted_first_line, this.any([this.double_quoted_next_line, n], this.rgx(`${blank_character}*`)));
+        return this.all(this.double_quoted_first_line, this.any([this.double_quoted_next_line, n], this.rgx(RegExp(`${blank_character}*`, "y"))));
       }
 
-      // [80]
+      // [080]
       // double-quoted-one-line ::=
       //   non-break-double-quoted-character*
       double_quoted_one_line() {
         return this.rgx(RegExp(`${non_break_double_quoted_character}*`, "yu"));
       }
 
-      // [81]
+      // [081]
       // double-quoted-first-line ::=
       //   (
       //     blank-character*
@@ -887,7 +894,7 @@
         return this.rgx(RegExp(`(?:${blank_character}*${non_space_double_quoted_character})*`, "yu"));
       }
 
-      // [82]
+      // [082]
       // double-quoted-next-line(n) ::=
       //   (
       //       double-quoted-line-continuation(n)
@@ -902,14 +909,18 @@
       //     )
       //   )?
       double_quoted_next_line(n) {
-        return this.all(this.any([this.double_quoted_line_continuation, n], [this.flow_folded_whitespace, n]), this.rep(0, 1, this.all(this.non_space_double_quoted_character, this.double_quoted_first_line, this.any([this.double_quoted_next_line, n], this.rgx(`${blank_character}*`)))));
+        return this.all(this.any([this.double_quoted_line_continuation, n], [this.flow_folded_whitespace, n]), this.rep('?', this.all(this.non_space_double_quoted_character, this.double_quoted_first_line, this.any([this.double_quoted_next_line, n], this.rgx(RegExp(`${blank_character}*`, "y"))))));
       }
 
+      // [083]
+      // non-space-double-quoted-character ::=
+      //     non-break-double-quoted-character
+      //   - blank-character
       non_space_double_quoted_character() {
         return this.rgx(re_non_space_double_quoted_character);
       }
 
-      // [85]
+      // [085]
       // double-quoted-line-continuation(n) ::=
       //   blank-character*
       //   '\'
@@ -917,7 +928,7 @@
       //   empty-line(n,FLOW-IN)*
       //   indentation-spaces-plus-maybe-more(n)
       double_quoted_line_continuation(n) {
-        return this.all(this.rgx(RegExp(`${blank_character}*\\\\${line_break}`, "y")), this.rep(0, null, [this.empty_line, n, "flow-in"]), [this.indentation_spaces_plus_maybe_more, n]);
+        return this.all(this.rgx(RegExp(`${blank_character}*\\\\${line_break}`, "y")), this.rep('*', [this.empty_line, n, "FLOW-IN"]), [this.indentation_spaces_plus_maybe_more, n]);
       }
 
       // [086]  # XXX fix typo in 1.3.0 spec
@@ -927,10 +938,10 @@
       // flow-mapping-context(n,FLOW-KEY)  ::= flow-sequence-entries(n,FLOW-KEY)
       flow_mapping_context(n, c) {
         return this.case(c, {
-          'flow-out': [this.flow_mapping_entries, n, "flow-in"],
-          'flow-in': [this.flow_mapping_entries, n, "flow-in"],
-          'block-key': [this.flow_mapping_entries, n, "flow-key"],
-          'flow-key': [this.flow_mapping_entries, n, "flow-key"]
+          'FLOW-OUT': [this.flow_mapping_entries, n, "FLOW-IN"],
+          'FLOW-IN': [this.flow_mapping_entries, n, "FLOW-IN"],
+          'BLOCK-KEY': [this.flow_mapping_entries, n, "FLOW-KEY"],
+          'FLOW-KEY': [this.flow_mapping_entries, n, "FLOW-KEY"]
         });
       }
 
@@ -941,14 +952,14 @@
       // flow-sequence-context(n,FLOW-KEY)  ::= flow-sequence-entries(n,FLOW-KEY)
       flow_sequence_context(n, c) {
         return this.case(c, {
-          'flow-out': [this.flow_sequence_entries, n, "flow-in"],
-          'flow-in': [this.flow_sequence_entries, n, "flow-in"],
-          'block-key': [this.flow_sequence_entries, n, "flow-key"],
-          'flow-key': [this.flow_sequence_entries, n, "flow-key"]
+          'FLOW-OUT': [this.flow_sequence_entries, n, "FLOW-IN"],
+          'FLOW-IN': [this.flow_sequence_entries, n, "FLOW-IN"],
+          'BLOCK-KEY': [this.flow_sequence_entries, n, "FLOW-KEY"],
+          'FLOW-KEY': [this.flow_sequence_entries, n, "FLOW-KEY"]
         });
       }
 
-      // [88]
+      // [088]
       // single-quoted-scalar(n,c) ::=
       //   "'"
       //   single-quoted-text(n,c)
@@ -957,21 +968,21 @@
         return this.all(this.chr("'"), [this.single_quoted_text, n, c], this.chr("'"));
       }
 
-      // [89]
+      // [089]
       // single-quoted-text(BLOCK-KEY) ::= single-quoted-one-line
       // single-quoted-text(FLOW-KEY)  ::= single-quoted-one-line
       // single-quoted-text(FLOW-OUT)  ::= single-quoted-multi-line(n)
       // single-quoted-text(FLOW-IN)   ::= single-quoted-multi-line(n)
       single_quoted_text(n, c) {
         return this.case(c, {
-          'block-key': this.rgx(re_single_quoted_one_line),
-          'flow-in': [this.single_quoted_multi_line, n],
-          'flow-key': this.rgx(re_single_quoted_one_line),
-          'flow-out': [this.single_quoted_multi_line, n]
+          'BLOCK-KEY': this.rgx(re_single_quoted_one_line),
+          'FLOW-IN': [this.single_quoted_multi_line, n],
+          'FLOW-KEY': this.rgx(re_single_quoted_one_line),
+          'FLOW-OUT': [this.single_quoted_multi_line, n]
         });
       }
 
-      // [90]
+      // [090]
       // single-quoted-multi-line(n) ::=
       //   single-quoted-first-line
       //   (
@@ -979,36 +990,36 @@
       //     | blank-character*
       //   )
       single_quoted_multi_line(n) {
-        return this.all(this.rgx(re_single_quoted_first_line), this.any([this.single_quoted_next_line, n], this.rgx(`${blank_character}*`)));
+        return this.all(this.rgx(re_single_quoted_first_line), this.any([this.single_quoted_next_line, n], this.rgx(RegExp(`${blank_character}*`, "y"))));
       }
 
       single_quoted_next_line(n) {
-        return this.all([this.flow_folded_whitespace, n], this.rep(0, 1, this.all(this.rgx(re_single_quoted_next_line), this.any([this.single_quoted_next_line, n], this.rgx(`${blank_character}*`)))));
+        return this.all([this.flow_folded_whitespace, n], this.rep('?', this.all(this.rgx(re_single_quoted_next_line), this.any([this.single_quoted_next_line, n], this.rgx(RegExp(`${blank_character}*`, "y"))))));
       }
 
-      // [97]
+      // [097]
       // flow-plain-scalar(n,FLOW-OUT)  ::= plain-scalar-multi-line(n,FLOW-OUT)
       // flow-plain-scalar(n,FLOW-IN)   ::= plain-scalar-multi-line(n,FLOW-IN)
       // flow-plain-scalar(n,BLOCK-KEY) ::= plain-scalar-single-line(BLOCK-KEY)
       // flow-plain-scalar(n,FLOW-KEY)  ::= plain-scalar-single-line(FLOW-KEY)
       flow_plain_scalar(n, c) {
         return this.case(c, {
-          'block-key': [this.plain_scalar_single_line, c],
-          'flow-in': [this.plain_scalar_multi_line, n, c],
-          'flow-key': [this.plain_scalar_single_line, c],
-          'flow-out': [this.plain_scalar_multi_line, n, c]
+          'BLOCK-KEY': [this.plain_scalar_single_line, c],
+          'FLOW-IN': [this.plain_scalar_multi_line, n, c],
+          'FLOW-KEY': [this.plain_scalar_single_line, c],
+          'FLOW-OUT': [this.plain_scalar_multi_line, n, c]
         });
       }
 
-      // [98]
+      // [098]
       // plain-scalar-multi-line(n,c) ::=
       //   plain-scalar-single-line(c)
       //   plain-scalar-next-line(n,c)*
       plain_scalar_multi_line(n, c) {
-        return this.all([this.plain_scalar_single_line, c], this.rep(0, null, [this.plain_scalar_next_line, n, c]));
+        return this.all([this.plain_scalar_single_line, c], this.rep('*', [this.plain_scalar_next_line, n, c]));
       }
 
-      // [99]
+      // [099]
       // plain-scalar-single-line(c) ::=
       //   plain-scalar-first-character(c)
       //   plain-scalar-line-characters(c)
@@ -1064,8 +1075,8 @@
       //       [ lookahead = non-space-plain-scalar-character(c) ]
       //     )
       plain_scalar_first_character(c) {
-        return this.any(this.rgx(RegExp(`(?:(?![-?:,[\\]{}\\x23&*!|>'"%@\`])${non_space_character // '#'
-}|(?:[?:-](?=${this.non_space_plain_scalar_character(c)})))`, "yu")));
+        return this.rgx(RegExp(`(?:(?![-?:,[\\]{}\\x23&*!|>'"%@\`])${non_space_character // '#'
+}|(?:[?:-](?=${this.non_space_plain_scalar_character(c)})))`, "yu"));
       }
 
       // [103]
@@ -1086,7 +1097,7 @@
       plain_scalar_characters_re(c) {
         var non_space_plain_scalar_character, plain_scalar_characters;
         non_space_plain_scalar_character = this.non_space_plain_scalar_character(c);
-        [plain_scalar_characters] = r(RegExp(`(?:(?:(?![:\\x23])${non_space_plain_scalar_character})|(?:(?<=${non_space_character})\\x23)|(?::(?=${non_space_plain_scalar_character})))`, "u"));
+        [plain_scalar_characters] = regx(RegExp(`(?:(?:(?![:\\x23])${non_space_plain_scalar_character})|(?:(?<=${non_space_character})\\x23)|(?::(?=${non_space_plain_scalar_character})))`, "u"));
         return plain_scalar_characters;
       }
 
@@ -1101,13 +1112,13 @@
       // non-space-plain-scalar-character(FLOW-KEY)  ::= flow-plain-scalar-character
       non_space_plain_scalar_character(c) {
         switch (c) {
-          case 'block-key':
+          case 'BLOCK-KEY':
             return this.block_plain_scalar_character();
-          case 'flow-in':
+          case 'FLOW-IN':
             return this.flow_plain_scalar_character();
-          case 'flow-key':
+          case 'FLOW-KEY':
             return this.flow_plain_scalar_character();
-          case 'flow-out':
+          case 'FLOW-OUT':
             return this.block_plain_scalar_character();
         }
       }
@@ -1117,7 +1128,7 @@
       //   non-space-character
       block_plain_scalar_character() {
         var re;
-        [re] = r(RegExp(`(?:${non_space_character})`, "u"));
+        [re] = regx(RegExp(`(?:${non_space_character})`, "u"));
         return re;
       }
 
@@ -1127,7 +1138,7 @@
       //   - flow-collection-indicators
       flow_plain_scalar_character() {
         var re;
-        [re] = r(RegExp(`(?:(?!${flow_collection_indicator})${non_space_character})`, "u"));
+        [re] = regx(RegExp(`(?:(?!${flow_collection_indicator})${non_space_character})`, "u"));
         return re;
       }
 
@@ -1187,10 +1198,10 @@
       // line-prefix-spaces(n,FLOW-IN)   ::= indentation-spaces-plus-maybe-more(n)
       line_prefix_spaces(n, c) {
         return this.case(c, {
-          'block-in': [this.indentation_spaces_exact, n],
-          'block-out': [this.indentation_spaces_exact, n],
-          'flow-in': [this.indentation_spaces_plus_maybe_more, n],
-          'flow-out': [this.indentation_spaces_plus_maybe_more, n]
+          'BLOCK-IN': [this.indentation_spaces_exact, n],
+          'BLOCK-OUT': [this.indentation_spaces_exact, n],
+          'FLOW-IN': [this.indentation_spaces_plus_maybe_more, n],
+          'FLOW-OUT': [this.indentation_spaces_plus_maybe_more, n]
         });
       }
 
@@ -1206,7 +1217,7 @@
       //   indentation-spaces(n)
       //   separation-blanks?
       indentation_spaces_plus_maybe_more(n) {
-        return this.all(this.indentation_spaces_n(n), this.rep(0, 1, this.separation_blanks));
+        return this.all(this.indentation_spaces_n(n), this.rep('?', this.separation_blanks));
       }
 
       // [115]
@@ -1215,7 +1226,7 @@
       //   folded-whitespace(n,FLOW-IN)
       //   indentation-spaces-plus-maybe-more(n)
       flow_folded_whitespace(n) {
-        return this.all(this.rep(0, 1, this.separation_blanks), [this.folded_whitespace, n, "flow-in"], [this.indentation_spaces_plus_maybe_more, n]);
+        return this.all(this.rep('?', this.separation_blanks), [this.folded_whitespace, n, "FLOW-IN"], [this.indentation_spaces_plus_maybe_more, n]);
       }
 
       // [116]
@@ -1225,42 +1236,52 @@
       //       empty-line(n,c)+
       //     )
       //   | break-as-space
-      // A.4.4. Comments
       folded_whitespace(n, c) {
-        return this.any(this.all(this.rgx(re_line_break), this.rep(1, null, [this.empty_line, n, c])), this.rgx(re_break_as_space));
+        return this.any(this.all(this.rgx(re_line_break), this.rep('+', [this.empty_line, n, c])), this.rgx(re_break_as_space));
       }
 
-      //------------------------------------------------------------------------------
-      // TODO Comments need attention.
-      // The translation from 1.2.2 to 1.3.0 may be wrong.
-      // https://yaml.org/spec/1.2.2/#rule-s-b-comment 77, 78, 79
-      // https://spec.yaml.io/main/spec/1.3.0/#rule-comment-lines 117, 118
-
-        // [117]
+      // [117]
       // comment-lines ::=
-      //     comment-line+
+      //   (
+      //     comment-line
       //   | <start-of-line>
+      //   blanks-and-comment-line*
+      //   )
       comment_lines() {
-        return this.all(this.any(this.comment_line, this.start_of_line), this.rep(0, null, this.l_comment));
+        // TODO
+        //     @rgx(///
+        //       (?:
+        //         #{comment_line}
+        //       | #{start_of_line}
+        //       )
+        //       #{blanks_and_comment_line}*
+        //     ///yum)
+        return this.all(this.any(this.comment_line, this.start_of_line), this.rep('*', this.blanks_and_comment_line));
       }
 
-      // XXX from [77] s-b-comment
       // [118]
       // comment-line ::=
+      //   (
+      //     separation-blanks
+      //     comment-content?
+      //   )?
+      //   line-ending
+      comment_line() {
+        // TODO
+        // @rgx(re_comment_line)
+        return this.all(this.rep('?', this.all(this.separation_blanks, this.rgx(RegExp(`${comment_content}?`, "yu"), true))), this.rgx(re_line_ending, true));
+      }
+
+      // [118b]          # TODO Renumber after spec updated
+      // blanks-and-comment-line ::=
       //   separation-blanks
       //   comment-content?
       //   line-ending
-      comment_line() {
-        return this.all(this.rep(0, 1, this.all(this.separation_blanks, this.rgx(RegExp(`${comment_content}?`, "yu"), true))), this.rgx(re_line_ending, true));
+      blanks_and_comment_line() {
+        return this.rgx(re_blanks_and_comment_line);
       }
 
-      l_comment() {
-        return this.rgx(re_l_comment);
-      }
-
-      //------------------------------------------------------------------------------
-
-        // [120]
+      // [120]
       // empty-line(n,c) ::=
       //   (
       //       line-prefix-spaces(n,c)
@@ -1268,7 +1289,7 @@
       //   )
       //   break-as-line-feed
       empty_line(n, c) {
-        return this.all(this.any([this.line_prefix_spaces, n, c], [this.indentation_spaces_less_than, n]), this.rgx(re_break_as_line_feed));
+        return this.all(this.any([this.line_prefix_spaces, n, c], [this.indentation_spaces_less_than, n]), this.break_as_line_feed);
       }
 
       // [121]
@@ -1280,12 +1301,12 @@
       // separation-characters(n,FLOW-KEY)  ::= separation-blanks
       separation_characters(n, c) {
         return this.case(c, {
-          'block-in': [this.separation_lines, n],
-          'block-key': this.separation_blanks(),
-          'block-out': [this.separation_lines, n],
-          'flow-in': [this.separation_lines, n],
-          'flow-key': this.separation_blanks(),
-          'flow-out': [this.separation_lines, n]
+          'BLOCK-IN': [this.separation_lines, n],
+          'BLOCK-KEY': this.separation_blanks(),
+          'BLOCK-OUT': [this.separation_lines, n],
+          'FLOW-IN': [this.separation_lines, n],
+          'FLOW-KEY': this.separation_blanks(),
+          'FLOW-OUT': [this.separation_lines, n]
         });
       }
 
@@ -1373,7 +1394,7 @@
       //       )?
       //     )
       node_properties(n, c) {
-        return this.any(this.all(this.tag_property, this.rep(0, 1, this.all([this.separation_characters, n, c], this.anchor_property))), this.all(this.anchor_property, this.rep(0, 1, this.all([this.separation_characters, n, c], this.tag_property))));
+        return this.any(this.all(this.tag_property, this.rep('?', this.all([this.separation_characters, n, c], this.anchor_property))), this.all(this.anchor_property, this.rep('?', this.all([this.separation_characters, n, c], this.tag_property))));
       }
 
       // [138]
@@ -1393,8 +1414,22 @@
         return this.rgx(RegExp(`(?:${verbatim_tag}|${shorthand_tag}|${non_specific_tag})`, "y"));
       }
 
+      // [145]
+      // byte-order-mark ::=
+      //   xFEFF
+      byte_order_mark() {
+        return this.rgx(RegExp(`${byte_order_mark}`, "y"));
+      }
+
       ws_lookahead() {
         return this.rgx(re_ws_lookahead);
+      }
+
+      // [154]
+      // break-as-line-feed ::=
+      //   line-break
+      break_as_line_feed() {
+        return this.rgx(re_line_break);
       }
 
     };
@@ -1402,7 +1437,7 @@
     // Helper functions:
 
     // Generate required regular expression and string variants:
-    r = function(rgx) {
+    regx = function(rgx) {
       var chars, regexp, str;
       str = String(rgx);
       if (str.match(/undefined/)) {
@@ -1419,45 +1454,30 @@
 
     start_of_line = '^';
 
-    end_of_file = '(?!.|\\n)';
+    end_of_input = '(?!.|\\n)';
 
-    // [004]
-    // document-start-indicator ::=
-    //   "---"
-    [document_start_indicator, re_document_start_indicator] = [];
+    inits = {};
 
-    i004 = function() {
-      return [document_start_indicator, re_document_start_indicator] = r(RegExp(`---${ws_lookahead}`));
+    init = function(id, func) {
+      inits[id] = func;
+      return '';
     };
 
-    // [005]
-    // document-end-indicator ::=
-    //   "..."                             # Not followed by non-ws char
-    [document_end_indicator, re_document_end_indicator] = r(/\.\.\./);
+    [document_start_indicator, re_document_start_indicator] = init('x450', function() {
+      return [document_start_indicator, re_document_start_indicator] = regx(RegExp(`---${ws_lookahead}`));
+    });
 
-    // [051]
-    // line-trail-comments(n) ::=
-    //   indentation-spaces-less-than(n)
-    //   comment-content
-    //   line-ending
-    //   comment-line*
-    re_line_trail_comments = '';
+    [document_end_indicator, re_document_end_indicator] = regx(/\.\.\./);
 
-    i051 = function() {
-      return [, re_line_trail_comments] = r(RegExp(`${comment_content}${line_ending}`, "u"));
-    };
+    [re_line_trail_comments] = init('x360', function() {
+      return [, re_line_trail_comments] = regx(RegExp(`${comment_content}${line_ending}`, "u"));
+    });
 
-    // [83]
-    // non-space-double-quoted-character ::=
-    //     non-break-double-quoted-character
-    //   - blank-character
-    [non_space_double_quoted_character, re_non_space_double_quoted_character] = [];
+    [non_space_double_quoted_character, re_non_space_double_quoted_character] = init('x440', function() {
+      return [non_space_double_quoted_character, re_non_space_double_quoted_character] = regx(RegExp(`(?!${blank_character})${non_break_double_quoted_character}`));
+    });
 
-    i083 = function() {
-      return [non_space_double_quoted_character, re_non_space_double_quoted_character] = r(RegExp(`(?!${blank_character})${non_break_double_quoted_character}`));
-    };
-
-    // [84]
+    // [084]
     // non-break-double-quoted-character ::=
     //     double-quoted-scalar-escape-character
     //   | (
@@ -1465,34 +1485,28 @@
     //       - '\'
     //       - '"'
     //     )
-    non_break_double_quoted_character = '';
+    [non_break_double_quoted_character] = init('x430', function() {
+      return [non_break_double_quoted_character] = regx(RegExp(`(?:${double_quoted_scalar_escape_character}|(?![\\\\"])${json_character})`));
+    });
 
-    i084 = function() {
-      return [non_break_double_quoted_character] = r(RegExp(`(?:${double_quoted_scalar_escape_character}|(?![\\\\"])${json_character})`));
-    };
-
-    // [91]
+    // [091]
     // single-quoted-one-line ::=
     //   non-break-single-quoted-character*
-    re_single_quoted_one_line = '';
+    [re_single_quoted_one_line] = init('x400', function() {
+      return [, re_single_quoted_one_line] = regx(RegExp(`${non_break_single_quoted_character}*`));
+    });
 
-    i091 = function() {
-      return [, re_single_quoted_one_line] = r(RegExp(`${non_break_single_quoted_character}*`));
-    };
-
-    // [92]
+    // [092]
     // single-quoted-first-line ::=
     //   (
     //     blank-character*
     //     non-space-single-quoted-character
     //   )*
-    [single_quoted_first_line, re_single_quoted_first_line] = [];
+    [single_quoted_first_line, re_single_quoted_first_line] = init('x410', function() {
+      return [single_quoted_first_line, re_single_quoted_first_line] = regx(RegExp(`(?:${blank_character}*${non_space_single_quoted_character})*`));
+    });
 
-    i092 = function() {
-      return [single_quoted_first_line, re_single_quoted_first_line] = r(RegExp(`(?:${blank_character}*${non_space_single_quoted_character})*`));
-    };
-
-    // [93]
+    // [093]
     // single-quoted-next-line(n) ::=
     //   flow-folded-whitespace(n)
     //   (
@@ -1503,207 +1517,162 @@
     //       | blank-character*
     //     )
     //   )?
-    re_single_quoted_next_line = '';
+    [re_single_quoted_next_line] = init('x420', function() {
+      return [, re_single_quoted_next_line] = regx(RegExp(`${non_space_single_quoted_character}${single_quoted_first_line}`));
+    });
 
-    i093 = function() {
-      return [, re_single_quoted_next_line] = r(RegExp(`${non_space_single_quoted_character}${single_quoted_first_line}`));
-    };
-
-    // [94]
+    // [094]
     // non-space-single-quoted-character ::=
     //     non-break-single-quoted-character
     //   - blank-character
-    non_space_single_quoted_character = '';
+    [non_space_single_quoted_character] = init('x390', function() {
+      return [non_space_single_quoted_character] = regx(RegExp(`(?:(?!${blank_character})${non_break_single_quoted_character})`));
+    });
 
-    i094 = function() {
-      return [non_space_single_quoted_character] = r(RegExp(`(?:(?!${blank_character})${non_break_single_quoted_character})`));
-    };
-
-    // [95]
+    // [095]
     // non-break-single-quoted-character ::=
     //     single-quoted-escaped-single-quote
     //   | (
     //         json-character
     //       - "'"
     //     )
-    non_break_single_quoted_character = '';
+    [non_break_single_quoted_character] = init('x380', function() {
+      return [non_break_single_quoted_character] = regx(RegExp(`(?:${single_quoted_escaped_single_quote}|(?:(?!')${json_character}))`));
+    });
 
-    i095 = function() {
-      return [non_break_single_quoted_character] = r(RegExp(`(?:${single_quoted_escaped_single_quote}|(?:(?!')${json_character}))`));
-    };
-
-    // [96]
+    // [096]
     // single-quoted-escaped-single-quote ::=
     //   "''"
-    single_quoted_escaped_single_quote = '';
+    [single_quoted_escaped_single_quote] = init('x370', function() {
+      return [single_quoted_escaped_single_quote] = regx(/''/);
+    });
 
-    i096 = function() {
-      return [single_quoted_escaped_single_quote] = r(/''/);
-    };
+    [comment_line, re_comment_line] = init('x355', function() {
+      return [comment_line, re_comment_line] = regx(RegExp(`(?:(?:${separation_blanks}${comment_content})?${line_ending})`, "u"));
+    });
 
-    // XXX from [78] l-comment
-    // [i118b]
-    // l-comment ::=
-    //   s-separate-in-line
-    //   c-nb-comment-text?
-    //   b-comment
-    [l_comment, re_l_comment] = [];
-
-    i118b = function() {
-      return [l_comment, re_l_comment] = r(RegExp(`${separation_blanks}${comment_content}*${line_ending}`, "u"));
-    };
+    [blanks_and_comment_line, re_blanks_and_comment_line] = init('x350', function() {
+      return [blanks_and_comment_line, re_blanks_and_comment_line] = regx(RegExp(`${separation_blanks}${comment_content}?${line_ending}`, "u"));
+    });
 
     // [119]
     // comment-content ::=
     //   '#'
     //   non-break-character*
-    comment_content = '';
-
-    i119 = function() {
-      return [comment_content] = r(RegExp(`(?:\\x23${non_break_character}*)`, "u"));
-    };
+    [comment_content] = init('x340', function() {
+      return [comment_content] = regx(RegExp(`(?:\\x23${non_break_character}*)`, "u"));
+    });
 
     // [123]
     // separation-blanks ::=
     //     blank-character+
     //   | <start-of-line>
-    [separation_blanks, re_separation_blanks] = [];
-
-    i123 = function() {
-      return [separation_blanks, re_separation_blanks] = r(RegExp(`(?:${blank_character}+|${start_of_line})`));
-    };
+    [separation_blanks, re_separation_blanks] = init('x210', function() {
+      return [separation_blanks, re_separation_blanks] = regx(RegExp(`(?:${blank_character}+|${start_of_line})`));
+    });
 
     // [127]
     // directive-name ::=
     //   non-space-character+
-    directive_name = '';
-
-    i127 = function() {
-      return [directive_name] = r(RegExp(`${non_space_character}+`, "u"));
-    };
+    [directive_name] = init('x330', function() {
+      return [directive_name] = regx(RegExp(`${non_space_character}+`, "u"));
+    });
 
     // [128]
     // directive-parameter ::=
     //   non-space-character+
-    directive_parameter = '';
-
-    i128 = function() {
-      return [directive_parameter] = r(RegExp(`${non_space_character}+`, "u"));
-    };
+    [directive_parameter] = init('x320', function() {
+      return [directive_parameter] = regx(RegExp(`${non_space_character}+`, "u"));
+    });
 
     // [130]
     // tag-handle ::=
     //     named-tag-handle
     //   | secondary-tag-handle
     //   | primary-tag-handle
-    [tag_handle, re_tag_handle] = [];
-
-    i130 = function() {
-      return [tag_handle, re_tag_handle] = r(RegExp(`(?:${named_tag_handle}|${secondary_tag_handle}|${primary_tag_handle})`));
-    };
+    [tag_handle, re_tag_handle] = init('x250', function() {
+      return [tag_handle, re_tag_handle] = regx(RegExp(`(?:${named_tag_handle}|${secondary_tag_handle}|${primary_tag_handle})`));
+    });
 
     // [131]
     // named-tag-handle ::=
     //   '!'
     //   word-character+
     //   '!'
-    named_tag_handle = '';
-
-    i131 = function() {
-      return [named_tag_handle] = r(RegExp(`!${word_character}+!`));
-    };
+    [named_tag_handle] = init('x240', function() {
+      return [named_tag_handle] = regx(RegExp(`!${word_character}+!`));
+    });
 
     // [132]
     // secondary-tag-handle ::=
     //   "!!"
-    secondary_tag_handle = '';
-
-    i132 = function() {
+    [secondary_tag_handle] = init('x230', function() {
       return secondary_tag_handle = "!!";
-    };
+    });
 
     // [133]
     // primary-tag-handle ::=
     //   '!'
-    primary_tag_handle = '';
-
-    i133 = function() {
+    [primary_tag_handle] = init('x220', function() {
       return primary_tag_handle = "!";
-    };
+    });
 
     // [135]
     // local-tag-prefix ::=
     //   '!'
     //   uri-character*
-    local_tag_prefix = '';
-
-    i135 = function() {
-      return [local_tag_prefix] = r(RegExp(`!${uri_character}*`));
-    };
+    [local_tag_prefix] = init('x260', function() {
+      return [local_tag_prefix] = regx(RegExp(`!${uri_character}*`));
+    });
 
     // [136]
     // global-tag-prefix ::=
     //   tag-character
     //   uri-character*
-    global_tag_prefix = '';
-
-    i136 = function() {
-      return [global_tag_prefix] = r(RegExp(`${tag_char}${uri_character}*`));
-    };
+    [global_tag_prefix] = init('x270', function() {
+      return [global_tag_prefix] = regx(RegExp(`${tag_char}${uri_character}*`));
+    });
 
     // [139]
     // anchor-name ::=
     //   anchor-character+
-    anchor_name = '';
-
-    i139 = function() {
-      return [anchor_name] = r(RegExp(`(?:${anchor_character})+`, "u"));
-    };
+    [anchor_name] = init('x310', function() {
+      return [anchor_name] = regx(RegExp(`(?:${anchor_character})+`, "u"));
+    });
 
     // [140]
     // anchor-character ::=
     //     non-space-character
     //   - flow-collection-indicators
-    anchor_character = '';
-
-    i140 = function() {
-      return [anchor_character] = r(RegExp(`(?:(?!${flow_collection_indicator})${non_space_character})+`, "u"));
-    };
+    [anchor_character] = init('x300', function() {
+      return [anchor_character] = regx(RegExp(`(?:(?!${flow_collection_indicator})${non_space_character})+`, "u"));
+    });
 
     // [142]
     // verbatim-tag ::=
     //   "!<"
     //   uri-character+
     //   '>'
-    verbatim_tag = '';
-
-    i142 = function() {
-      return [verbatim_tag] = r(RegExp(`(?:!<${uri_character}+>)`));
-    };
+    [verbatim_tag] = init('x280', function() {
+      return [verbatim_tag] = regx(RegExp(`(?:!<${uri_character}+>)`));
+    });
 
     // [143]
     // shorthand-tag ::=
     //   tag-handle
     //   tag-character+
-    shorthand_tag = '';
-
-    i143 = function() {
-      return [shorthand_tag] = r(RegExp(`(${tag_handle}${tag_char}+)`));
-    };
+    [shorthand_tag] = init('x290', function() {
+      return [shorthand_tag] = regx(RegExp(`(${tag_handle}${tag_char}+)`));
+    });
 
     // [144]
     // non-specific-tag ::=
     //   '!'
     non_specific_tag = "!";
 
-    // [145]
-    // byte-order-mark ::=
-    //   xFEFF
-    byte_order_mark = '';
-
-    i145 = function() {
+    [byte_order_mark] = init('x030', function() {
       return byte_order_mark = "\u{FEFF}";
-    };
+    });
 
     // [146]
     // yaml-character ::=
@@ -1717,31 +1686,25 @@
     //   | [xA0-xD7FF]                     # Basic multilingual plane (BMP)
     //   | [xE000-xFFFD]                   # Additional unicode areas
     //   | [x010000-x10FFFF]               # 32 bit
-    yaml_character = '';
-
-    i146 = function() {
-      return [yaml_character] = r(/[\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u);
-    };
+    [yaml_character] = init('x010', function() {
+      return [yaml_character] = regx(/[\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u);
+    });
 
     // [147]
     // json-character ::=
     //     x09                             # Tab
     //   | [x20-x10FFFF]                   # Non-C0-control characters
-    json_character = '';
-
-    i147 = function() {
-      return [json_character] = r(/[\x09\x20-\u{10FFFF}]/u);
-    };
+    [json_character] = init('x020', function() {
+      return [json_character] = regx(/[\x09\x20-\u{10FFFF}]/u);
+    });
 
     // [148]
     // non-space-character ::=
     //     non-break-character
     //   - blank-character
-    [non_space_character, re_non_space_character] = [];
-
-    i148 = function() {
-      return [non_space_character, re_non_space_character] = r(RegExp(`(?:(?!${blank_character})${non_break_character})`, "u"));
-    };
+    [non_space_character, re_non_space_character] = init('x120', function() {
+      return [non_space_character, re_non_space_character] = regx(RegExp(`(?:(?!${blank_character})${non_break_character})`, "u"));
+    });
 
     // [149]
     // non-break-character ::=
@@ -1749,59 +1712,44 @@
     //   - x0A
     //   - x0D
     //   - byte-order-mark
-    [non_break_character, re_non_break_character] = [];
-
-    i149 = function() {
-      return [non_break_character, re_non_break_character] = r(RegExp(`(?:(?![\\x0A\\x0D${byte_order_mark}])${yaml_character})`, "u"));
-    };
+    [non_break_character, re_non_break_character] = init('x110', function() {
+      return [non_break_character, re_non_break_character] = regx(RegExp(`(?:(?![\\x0A\\x0D${byte_order_mark}])${yaml_character})`, "u"));
+    });
 
     // [150]
     // blank-character ::=
     //     x20                             # Space
     //   | x09                             # Tab
-    [blank_character, ws_lookahead, re_ws_lookahead] = [];
-
-    i150 = function() {
-      [blank_character] = r(RegExp(`[${space_character}\\t]`));
-      return [ws_lookahead, re_ws_lookahead] = r(RegExp(`(?=${end_of_file}|${blank_character}|${line_break})`));
-    };
+    [blank_character, ws_lookahead, re_ws_lookahead] = init('x100', function() {
+      [blank_character] = regx(RegExp(`[${space_character}\\t]`));
+      return [ws_lookahead, re_ws_lookahead] = regx(RegExp(`(?=${end_of_input}|${blank_character}|${line_break})`));
+    });
 
     // [151]
     // space-character ::=
     //   x20
-    space_character = '';
-
-    i151 = function() {
+    [space_character] = init('x090', function() {
       return space_character = "\x20";
-    };
+    });
 
     // [152]
     // line-ending ::=
     //     line-break
     //   | <end-of-input>
-    [line_ending, re_line_ending] = [];
-
-    i152 = function() {
-      return [line_ending, re_line_ending] = r(RegExp(`(?:${line_break}|${end_of_file})`));
-    };
+    [line_ending, re_line_ending] = init('x200', function() {
+      return [line_ending, re_line_ending] = regx(RegExp(`(?:${line_break}|${end_of_input})`));
+    });
 
     // [153]
     // break-as-space ::=
     //   line-break
-    re_break_as_space = '';
-
-    i153 = function() {
+    [re_break_as_space] = init('x190', function() {
       return re_break_as_space = re_line_break;
-    };
+    });
 
-    // [154]
-    // break-as-line-feed ::=
-    //   line-break
-    re_break_as_line_feed = '';
-
-    i154 = function() {
+    [re_break_as_line_feed] = init('x060', function() {
       return re_break_as_line_feed = re_line_break;
-    };
+    });
 
     // [155]
     // line-break ::=
@@ -1811,11 +1759,9 @@
     //     )
     //   | x0D
     //   | x0A
-    [line_break, re_line_break] = [];
-
-    i155 = function() {
-      return [line_break, re_line_break] = r(/(?:(?:\x0D\x0A)|\x0D|\x0A)/);
-    };
+    [line_break, re_line_break] = init('x050', function() {
+      return [line_break, re_line_break] = regx(/(?:(?:\x0D\x0A)|\x0D|\x0A)/);
+    });
 
     // XXX Rename to flow-collection-indicator
     // [156]
@@ -1828,11 +1774,9 @@
       // [156] 023
     // c-flow-indicator ::=
     //   ',' | '[' | ']' | '{' | '}'
-    [flow_collection_indicator, flow_collection_indicator_s] = [];
-
-    i156 = function() {
-      return [flow_collection_indicator, , flow_collection_indicator_s] = r(/[,[\]{}]/);
-    };
+    [flow_collection_indicator, flow_collection_indicator_s] = init('x040', function() {
+      return [flow_collection_indicator, , flow_collection_indicator_s] = regx(/[,[\]{}]/);
+    });
 
     // [157]
     // double-quoted-scalar-escape-character ::=
@@ -1845,7 +1789,7 @@
     //     | 'n'
     //     | 'v'
     //     | 'f'
-    //     | 'r'
+    //     | 'rgx'
     //     | 'e'
     //     | x20
     //     | '"'
@@ -1859,22 +1803,18 @@
     //     | ( 'u' hexadecimal-digit{4} )
     //     | ( 'U' hexadecimal-digit{8} )
     //   )
-    double_quoted_scalar_escape_character = '';
-
-    i157 = function() {
-      return [double_quoted_scalar_escape_character] = r(RegExp(`\\\\(?:[0abt\\tnvfre\\x20"/\\\\N_LP]|x${hexadecimal_digit}{2}|u${hexadecimal_digit}{4}|U${hexadecimal_digit}{8})`));
-    };
+    [double_quoted_scalar_escape_character] = init('x180', function() {
+      return [double_quoted_scalar_escape_character] = regx(RegExp(`\\\\(?:[0abt\\tnvfrgxe\\x20"/\\\\N_LP]|x${hexadecimal_digit}{2}|u${hexadecimal_digit}{4}|U${hexadecimal_digit}{8})`));
+    });
 
     // [158]
     // tag-character ::=
     //     uri-character
     //   - '!'
     //   - flow-collection-indicators
-    tag_char = '';
-
-    i158 = function() {
-      return [tag_char] = r(RegExp(`(?:(?![!${flow_collection_indicator_s}])${uri_character})`));
-    };
+    [tag_char] = init('x170', function() {
+      return [tag_char] = regx(RegExp(`(?:(?![!${flow_collection_indicator_s}])${uri_character})`));
+    });
 
     // [159]
     // uri-character ::=
@@ -1904,76 +1844,60 @@
     //   | ')'
     //   | '['
     //   | ']'
-    uri_character = '';
-
-    i159 = function() {
-      return [uri_character] = r(RegExp(`(?:%${hexadecimal_digit}{2}|[${word_character_s}\\x23;/?:@&=+$,_.!~*'()[\\]])`));
-    };
+    [uri_character] = init('x160', function() {
+      return [uri_character] = regx(RegExp(`(?:%${hexadecimal_digit}{2}|[${word_character_s}\\x23;/?:@&=+$,_.!~*'()[\\]])`));
+    });
 
     // [160]
     // word-character ::=
     //     decimal-digit
     //   | ascii-alpha-character
     //   | '-'
-    [word_character, , word_character_s] = [];
-
-    i160 = function() {
-      return [word_character, , word_character_s] = r(RegExp(`[${decimal_digit_s}${ascii_alpha_character_s}\\-]`));
-    };
+    [word_character, , word_character_s] = init('x150', function() {
+      return [word_character, , word_character_s] = regx(RegExp(`[${decimal_digit_s}${ascii_alpha_character_s}\\-]`));
+    });
 
     // [161]
     // hexadecimal-digit ::=
     //     decimal-digit
     //   | [x41-x46]                       # A-F
     //   | [x61-x66]                       # a-f
-    hexadecimal_digit = '';
-
-    i161 = function() {
-      return [hexadecimal_digit] = r(RegExp(`[${decimal_digit_s}A-Fa-f]`));
-    };
+    [hexadecimal_digit] = init('x130', function() {
+      return [hexadecimal_digit] = regx(RegExp(`[${decimal_digit_s}A-Fa-f]`));
+    });
 
     // [162]
     // decimal-digit ::=
     //   [x30-x39]                         # 0-9
-    [decimal_digit, decimal_digit_s] = [];
-
-    i162 = function() {
-      return [decimal_digit, , decimal_digit_s] = r(/[0-9]/);
-    };
+    [decimal_digit, decimal_digit_s] = init('x070', function() {
+      return [decimal_digit, , decimal_digit_s] = regx(/[0-9]/);
+    });
 
     // [163]
     // decimal-digit-1-9 ::=
     //   [x31-x39]                         # 0-9
-    re_decimal_digit_1_9 = '';
-
-    i163 = function() {
-      return [re_decimal_digit_1_9] = r(/[0-9]/);
-    };
+    [re_decimal_digit_1_9] = init('x080', function() {
+      return [, re_decimal_digit_1_9] = regx(/[0-9]/);
+    });
 
     // [164]
     // ascii-alpha-character ::=
     //     [x41-x5A]                       # A-Z
     //   | [x61-x7A]                       # a-z
-    ascii_alpha_character_s = '';
+    [ascii_alpha_character_s] = init('x140', function() {
+      return [, , ascii_alpha_character_s] = regx(/[A-Za-z]/);
+    });
 
-    i164 = function() {
-      return [, , ascii_alpha_character_s] = r(/[A-Za-z]/);
-    };
-
-    ref = [i146, i147, i145, i156, i155, i154, i162, i163, i151, i150, i149, i148, i161, i164, i160, i159, i158, i157, i153, i152, i123, i133, i132, i131, i130, i135, i136, i142, i143, i140, i139, i128, i127, i119, i118b, i051, i096, i095, i094, i091, i092, i093, i084, i083, i004];
+    ref = Object.keys(inits).sort();
     for (i = 0, len = ref.length; i < len; i++) {
-      init = ref[i];
-      //------------------------------------------------------------------------------
-
+      id = ref[i];
       // Call the variable initialization functions in the order needed for
       // JavaScript to be correct.
-      init();
+      inits[id]();
     }
 
     return Grammar;
 
   }).call(this);
-
-  //     i002
 
 }).call(this);

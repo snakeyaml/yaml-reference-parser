@@ -392,9 +392,9 @@
       });
       text = lines.join('');
       t = this.parser.state_curr().t;
-      if (t === 'clip') {
+      if (t === 'CLIP') {
         text = text.replace(/\n+$/, "\n");
-      } else if (t === 'strip') {
+      } else if (t === 'STRIP') {
         text = text.replace(/\n+$/, "");
       }
       return this.add(scalar_event('literal', text));
@@ -430,12 +430,12 @@
       text = text.replace(/^([\ \t]+\S.*)\n(\n+)(?=\S)/gm, "$1$2");
       text += "\n";
       t = this.parser.state_curr().t;
-      if (t === 'clip') {
+      if (t === 'CLIP') {
         text = text.replace(/\n+$/, "\n");
         if (text === "\n") {
           text = '';
         }
-      } else if (t === 'strip') {
+      } else if (t === 'STRIP') {
         text = text.replace(/\n+$/, "");
       }
       return this.add(scalar_event('folded', text));

@@ -214,9 +214,9 @@ global.Receiver = class Receiver
     lines = lines.map (l)-> "#{l.text}\n"
     text = lines.join ''
     t = @parser.state_curr().t
-    if t == 'clip'
+    if t == 'CLIP'
       text = text.replace /\n+$/, "\n"
-    else if t == 'strip'
+    else if t == 'STRIP'
       text = text.replace /\n+$/, ""
     @add scalar_event 'literal', text
   not__block_literal_scalar: ->
@@ -240,10 +240,10 @@ global.Receiver = class Receiver
     text += "\n"
 
     t = @parser.state_curr().t
-    if t == 'clip'
+    if t == 'CLIP'
       text = text.replace /\n+$/, "\n"
       text = '' if text == "\n"
-    else if t == 'strip'
+    else if t == 'STRIP'
       text = text.replace /\n+$/, ""
     @add scalar_event 'folded', text
   not__block_folded_scalar: ->

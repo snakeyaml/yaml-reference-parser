@@ -232,17 +232,24 @@
     }
 
     // Repeat a rule a certain number of times:
-    rep(min, max, func) {
-      var rep;
+    rep(quant, func) {
+      var max, min, rep;
+      switch (quant) {
+        case '*':
+          [min, max] = [0, 2e308];
+          break;
+        case '?':
+          [min, max] = [0, 1];
+          break;
+        case '+':
+          [min, max] = [1, 2e308];
+      }
       rep = function() {
         var count, pos, pos_start;
-        if ((max != null) && max < 0) {
-          return false;
-        }
         count = 0;
         pos = this.pos;
         pos_start = pos;
-        while (!(max != null) || count < max) {
+        while (count < max) {
           if (!this.call(func)) {
             break;
           }
@@ -252,13 +259,13 @@
           count++;
           pos = this.pos;
         }
-        if (count >= min && (!(max != null) || count <= max)) {
+        if (count >= min && count <= max) {
           return true;
         }
         this.pos = pos_start;
         return false;
       };
-      return name_('rep', rep, `rep(${min},${max})`);
+      return name_('rep', rep, `rep(${quant})`);
     }
 
     // Call a rule depending on state value:
@@ -292,9 +299,6 @@
     // Match a regex:
     rgx(regex, on_end = false) {
       var rgx;
-      if (isString(regex)) {
-        regex = RegExp(`${regex}`, "y");
-      }
       rgx = function() {
         var m;
         if (this.the_end()) {
@@ -559,7 +563,7 @@
       return this.pos === 0 || this.pos >= this.end || this.input[this.pos - 1] === "\n";
     }
 
-    end_of_stream() {
+    end_of_input() {
       return this.pos >= this.end;
     }
 

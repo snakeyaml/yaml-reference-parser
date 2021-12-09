@@ -179,22 +179,26 @@ global.Parser = class Parser extends Grammar
       return false
 
   # Repeat a rule a certain number of times:
-  rep: (min, max, func)->
+  rep: (quant, func)->
+    switch quant
+      when '*' then [min, max] = [0, Infinity]
+      when '?' then [min, max] = [0, 1]
+      when '+' then [min, max] = [1, Infinity]
+
     rep = ->
-      return false if max? and max < 0
       count = 0
       pos = @pos
       pos_start = pos
-      while not(max?) or count < max
+      while count < max
         break unless @call func
         break if @pos == pos
         count++
         pos = @pos
-      if count >= min and (not(max?) or count <= max)
+      if count >= min and count <= max
         return true
       @pos = pos_start
       return false
-    name_ 'rep', rep, "rep(#{min},#{max})"
+    name_ 'rep', rep, "rep(#{quant})"
 
   # Call a rule depending on state value:
   case: (var_, map)->
@@ -225,9 +229,6 @@ global.Parser = class Parser extends Grammar
 
   # Match a regex:
   rgx: (regex, on_end=false)->
-    if isString regex
-      regex = /// #{regex} ///y
-
     rgx = ->
       return on_end if @the_end()
       regex.lastIndex = @pos
@@ -384,7 +385,7 @@ global.Parser = class Parser extends Grammar
       @pos >= @end or
       @input[@pos - 1] == "\n"
 
-  end_of_stream: ->
+  end_of_input: ->
     return @pos >= @end
 
   empty: -> true
