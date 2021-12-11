@@ -126,6 +126,8 @@ global.Parser = class Parser extends Grammar
     @state_pop()
     return value
 
+  got: (v)-> v
+
   receive: (func, type, pos)->
     func.receivers ?= @make_receivers()
     receiver = func.receivers[type]
@@ -228,7 +230,18 @@ global.Parser = class Parser extends Grammar
     )
 
   # Match a regex:
-  rgx: (regex, on_end=false)->
+  rgx: (regex, debug=false)->
+    regex = /// #{regex} ///u unless isRegex regex
+    str = String(regex)
+    on_end = !! str.match(/\)[\?\*]\/[muy]*$/)
+    die_ str if str.match(/y$/)
+    str = str[0..-2] if str.endsWith('u')
+    str = String(str)[1..-2]
+      .replace(/\((?!\?)/g, '(?:')
+    regex = /// (?: #{str} ) ///yum
+
+    die regex if debug
+
     rgx = ->
       return on_end if @the_end()
       regex.lastIndex = @pos

@@ -119,6 +119,7 @@ global.Receiver = class Receiver
   got__document_start_indicator: ->
     @check_document_end()
     @document_start.explicit = true
+
   got__document_end_indicator: ->
     if @document_end?
       @document_end.explicit = true

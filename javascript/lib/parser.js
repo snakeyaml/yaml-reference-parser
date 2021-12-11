@@ -159,6 +159,10 @@
       return value;
     }
 
+    got(v) {
+      return v;
+    }
+
     receive(func, type, pos) {
       var receiver;
       if (func.receivers == null) {
@@ -297,8 +301,24 @@
     }
 
     // Match a regex:
-    rgx(regex, on_end = false) {
-      var rgx;
+    rgx(regex, debug = false) {
+      var on_end, rgx, str;
+      if (!isRegex(regex)) {
+        regex = RegExp(`${regex}`, "u");
+      }
+      str = String(regex);
+      on_end = !!str.match(/\)[\?\*]\/[muy]*$/);
+      if (str.match(/y$/)) {
+        die_(str);
+      }
+      if (str.endsWith('u')) {
+        str = str.slice(0, -1);
+      }
+      str = String(str).slice(1, -1).replace(/\((?!\?)/g, '(?:');
+      regex = RegExp(`(?:${str})`, "yum");
+      if (debug) {
+        die(regex);
+      }
       rgx = function() {
         var m;
         if (this.the_end()) {
