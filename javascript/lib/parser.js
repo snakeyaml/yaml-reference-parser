@@ -23,11 +23,13 @@
       this.pos = 0;
       this.end = 0;
       this.state = [];
-      this.trace_num = 0;
-      this.trace_line = 0;
-      this.trace_on = true;
-      this.trace_off = 0;
-      this.trace_info = ['', '', ''];
+      if (TRACE) {
+        this.trace_num = 0;
+        this.trace_line = 0;
+        this.trace_on = true;
+        this.trace_off = 0;
+        this.trace_info = ['', '', ''];
+      }
     }
 
     parse(input1) {
@@ -39,10 +41,14 @@
       }
       try {
         ok = this.call(this.TOP);
-        this.trace_flush();
+        if (TRACE) {
+          this.trace_flush();
+        }
       } catch (error) {
         err = error;
-        this.trace_flush();
+        if (TRACE) {
+          this.trace_flush();
+        }
         throw err;
       }
       if (!ok) {
@@ -107,10 +113,10 @@
       if (!isFunction(func)) {
         FAIL(`Bad call type '${typeof_(func)}' for '${func}'`);
       }
-      trace = func.trace != null ? func.trace : func.trace = func.name;
-      this.state_push(trace);
-      this.trace_num++;
+      this.state_push(func.name);
       if (TRACE) {
+        trace = func.trace != null ? func.trace : func.trace = func.name;
+        this.trace_num++;
         this.trace('?', trace, args);
       }
       if (func.name === 'bare_document') {
@@ -126,7 +132,6 @@
         }
       });
       pos = this.pos;
-      this.receive(func, 'try', pos);
       if (DEBUG && func.name.match(/_\w/)) {
         debug_rule(func.name, ...args);
       }
@@ -135,67 +140,73 @@
         value = this.call(value);
       }
       if (type !== 'any' && typeof_(value) !== type) {
-        FAIL(`Calling '${trace}' returned '${typeof_(value)}' instead of '${type}'`);
+        FAIL(`Calling '${func.name}' returned '${typeof_(value)}' instead of '${type}'`);
       }
-      this.trace_num++;
-      if (type !== 'boolean') {
-        if (TRACE) {
+      if (TRACE) {
+        this.trace_num++;
+        if (type !== 'boolean') {
           this.trace('>', value);
-        }
-      } else {
-        if (value) {
-          if (TRACE) {
-            this.trace('+', trace);
-          }
-          this.receive(func, 'got', pos);
         } else {
-          if (TRACE) {
+          if (value) {
+            this.trace('+', trace);
+          } else {
             this.trace('x', trace);
           }
-          this.receive(func, 'not', pos);
         }
       }
       this.state_pop();
       return value;
     }
 
-    got(v) {
-      return v;
-    }
-
-    receive(func, type, pos) {
-      var receiver;
-      if (func.receivers == null) {
-        func.receivers = this.make_receivers();
+    got(rule, {name, try_, got_, not_} = {}) {
+      var got_func, not_func, try_func;
+      if (name == null) {
+        name = ((new Error().stack).match(/at Parser.(\w+?_\w+) \(/))[1];
       }
-      receiver = func.receivers[type];
-      if (!receiver) {
-        return;
+      if (try_ == null) {
+        try_ = false;
       }
-      return receiver.call(this.receiver, {
-        text: this.input.slice(pos, this.pos),
-        state: this.state_curr(),
-        start: pos
-      });
-    }
-
-    make_receivers() {
-      var i, m, n, name, names;
-      i = this.state.length;
-      names = [];
-      while (i > 0 && !((n = this.state[--i].name).match(/_/))) {
-        if (m = n.match(/^chr\((.)\)$/)) {
-          n = 'x' + hex_char(m[1]);
-        } else {
-          n = n.replace(/\(.*/, '');
+      if (not_ == null) {
+        not_ = false;
+      }
+      if (got_ == null) {
+        got_ = !not_;
+      }
+      if (try_) {
+        try_func = this.receiver.constructor.prototype[`try_${name}`] || die(`@receiver.try_${name} not defined`);
+      }
+      if (got_) {
+        got_func = this.receiver.constructor.prototype[`got_${name}`] || die(`@receiver.got_${name} not defined`);
+      }
+      if (not_) {
+        not_func = this.receiver.constructor.prototype[`not_${name}`] || die(`@receiver.not_${name} not defined`);
+      }
+      return () => {
+        var context, pos, value;
+        pos = this.pos;
+        if (try_) {
+          try_func.call(this.receiver, {
+            text: this.input.slice(pos, this.pos),
+            state: this.state_curr(),
+            start: pos
+          });
         }
-        names.unshift(n);
-      }
-      name = [n, ...names].join('__');
-      return {
-        try: this.receiver.constructor.prototype[`try__${name}`],
-        got: this.receiver.constructor.prototype[`got__${name}`],
-        not: this.receiver.constructor.prototype[`not__${name}`]
+        value = this.call(rule);
+        context = {
+          text: this.input.slice(pos, this.pos),
+          state: this.state_curr(),
+          start: pos
+        };
+        if (value) {
+          if (got_) {
+            got_func.call(this.receiver, context);
+          }
+        } else {
+          if (not_) {
+            not_func.call(this.receiver, context);
+          }
+        }
+        return value;
       };
     }
 

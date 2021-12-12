@@ -18,22 +18,27 @@ global.Parser = class Parser extends Grammar
     @pos = 0
     @end = 0
     @state = []
-    @trace_num = 0
-    @trace_line = 0
-    @trace_on = true
-    @trace_off = 0
-    @trace_info = ['', '', '']
+
+    if TRACE
+      @trace_num = 0
+      @trace_line = 0
+      @trace_on = true
+      @trace_off = 0
+      @trace_info = ['', '', '']
 
   parse: (@input)->
     @end = @input.length
 
-    @trace_on = not @trace_start() if TRACE
+    if TRACE
+      @trace_on = not @trace_start()
 
     try
       ok = @call @TOP
-      @trace_flush()
+      if TRACE
+        @trace_flush()
     catch err
-      @trace_flush()
+      if TRACE
+        @trace_flush()
       throw err
 
     throw "Parser failed" if not ok
@@ -84,12 +89,12 @@ global.Parser = class Parser extends Grammar
     FAIL "Bad call type '#{typeof_ func}' for '#{func}'" \
       unless isFunction func
 
-    trace = func.trace ?= func.name
+    @state_push(func.name)
 
-    @state_push(trace)
-
-    @trace_num++
-    @trace '?', trace, args if TRACE
+    if TRACE
+      trace = func.trace ?= func.name
+      @trace_num++
+      @trace '?', trace, args
 
     if func.name == 'bare_document'
       @state_curr().doc = true
@@ -100,7 +105,6 @@ global.Parser = class Parser extends Grammar
       a
 
     pos = @pos
-    @receive func, 'try', pos
 
     if DEBUG && func.name.match /_\w/
       debug_rule func.name, args...
@@ -109,50 +113,62 @@ global.Parser = class Parser extends Grammar
     while isFunction(value) or isArray(value)
       value = @call value
 
-    FAIL "Calling '#{trace}' returned '#{typeof_ value}' instead of '#{type}'" \
+    FAIL "Calling '#{func.name}' returned '#{typeof_ value}' instead of '#{type}'" \
       if type != 'any' and typeof_(value) != type
 
-    @trace_num++
-    if type != 'boolean'
-      @trace '>', value if TRACE
-    else
-      if value
-        @trace '+', trace if TRACE
-        @receive func, 'got', pos
+    if TRACE
+      @trace_num++
+      if type != 'boolean'
+        @trace '>', value
       else
-        @trace 'x', trace if TRACE
-        @receive func, 'not', pos
+        if value
+          @trace '+', trace
+        else
+          @trace 'x', trace
 
     @state_pop()
     return value
 
-  got: (v)-> v
+  got: (rule, {name, try_, got_, not_} = {})->
+    name ?= ((new Error().stack).match(/at Parser.(\w+?_\w+) \(/))[1]
+    try_ ?= false
+    not_ ?= false
+    got_ ?= !not_
 
-  receive: (func, type, pos)->
-    func.receivers ?= @make_receivers()
-    receiver = func.receivers[type]
-    return unless receiver
+    if try_
+      try_func = @receiver.constructor.prototype["try_#{name}"] or
+        die "@receiver.try_#{name} not defined"
+    if got_
+      got_func = @receiver.constructor.prototype["got_#{name}"] or
+        die "@receiver.got_#{name} not defined"
+    if not_
+      not_func = @receiver.constructor.prototype["not_#{name}"] or
+        die "@receiver.not_#{name} not defined"
 
-    receiver.call @receiver,
-      text: @input[pos...@pos]
-      state: @state_curr()
-      start: pos
+    =>
+      pos = @pos
 
-  make_receivers: ->
-    i = @state.length
-    names = []
-    while i > 0 and not((n = @state[--i].name).match /_/)
-      if m = n.match /^chr\((.)\)$/
-        n = 'x' + hex_char m[1]
+      if try_
+        try_func.call @receiver,
+          text: @input[pos...@pos]
+          state: @state_curr()
+          start: pos
+
+      value = @call(rule)
+
+      context =
+        text: @input[pos...@pos]
+        state: @state_curr()
+        start: pos
+
+      if value
+        if got_
+          got_func.call(@receiver, context)
       else
-        n = n.replace /\(.*/, ''
-      names.unshift n
-    name = [n, names...].join '__'
+        if not_
+          not_func.call(@receiver, context)
 
-    return
-      try: @receiver.constructor.prototype["try__#{name}"]
-      got: @receiver.constructor.prototype["got__#{name}"]
-      not: @receiver.constructor.prototype["not__#{name}"]
+      return value
 
 
 

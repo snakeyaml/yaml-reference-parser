@@ -3,7 +3,7 @@
   var Grammar;
 
   global.Grammar = Grammar = (function() {
-    var anchor_character, anchor_name, ascii_alpha_character_s, blank_character, blanks_and_comment_line, break_as_line_feed, break_as_space, byte_order_mark, check_node_properties, comment_content, comment_line, comment_lines, decimal_digit, decimal_digit_1_9, decimal_digit_s, directive_name, directive_parameter, document_end_indicator, document_prefix, document_start_indicator, double_quoted_scalar_escape_character, end_of_input, flow_collection_indicator, flow_collection_indicator_s, global_tag_prefix, hexadecimal_digit, i, id, init, inits, json_character, len, line_break, line_ending, line_trail_comments, local_tag_prefix, make, named_tag_handle, non_break_character, non_break_double_quoted_character, non_break_single_quoted_character, non_space_character, non_space_double_quoted_character, non_space_single_quoted_character, non_specific_tag, primary_tag_handle, ref, secondary_tag_handle, separation_blanks, shorthand_tag, single_quoted_escaped_single_quote, single_quoted_first_line, single_quoted_next_line, single_quoted_one_line, space_character, start_of_line, tag_character, tag_handle, uri_character, verbatim_tag, word_character, word_character_s, ws_lookahead, yaml_character;
+    var anchor_character, anchor_name, ascii_alpha_character_s, blank_character, blanks_and_comment_line, break_as_line_feed, break_as_space, byte_order_mark, check_node_properties, comment_content, comment_line, comment_lines, decimal_digit, decimal_digit_1_9, decimal_digit_s, directive_name, directive_parameter, document_end_indicator, document_prefix, document_start_indicator, double_quoted_scalar_escape_character, end_of_input, flow_collection_indicator, flow_collection_indicator_s, global_tag_prefix, hexadecimal_digit, i, id, init, inits, json_character, len, line_break, line_ending, line_trail_comments, local_tag_prefix, make, named_tag_handle, non_break_character, non_break_double_quoted_character, non_break_single_quoted_character, non_space_character, non_space_double_quoted_character, non_space_single_quoted_character, non_specific_tag, primary_tag_handle, ref, secondary_tag_handle, separation_blanks, shorthand_tag, single_quoted_escaped_single_quote, single_quoted_first_line, single_quoted_next_line, single_quoted_one_line, space_character, start_of_line, tag_character, tag_handle, try_got_not, uri_character, verbatim_tag, word_character, word_character_s, ws_lookahead, yaml_character;
 
     class Grammar {
       // Grammar rules:
@@ -26,7 +26,10 @@
       //     | start-indicator-and-document
       //   )*
       yaml_stream() {
-        return this.all(this.rep('*', this.document_prefix), this.rep('?', this.any_document), this.rep('*', this.any(this.all(this.rep('+', this.document_suffix), this.rep('*', this.document_prefix), this.rep('?', this.any_document)), this.rgx(RegExp(`${byte_order_mark}${comment_line}`, "u")), this.start_indicator_and_document)));
+        return this.got(this.all(this.rep('*', this.document_prefix), this.rep('?', this.any_document), this.rep('*', this.any(this.all(this.rep('+', this.document_suffix), this.rep('*', this.document_prefix), this.rep('?', this.any_document)), this.rgx(RegExp(`${byte_order_mark}${comment_line}`, "u")), this.start_indicator_and_document))), {
+          try_: true,
+          got_: true
+        });
       }
 
       document_prefix() {
@@ -42,11 +45,11 @@
       }
 
       document_start_indicator() {
-        return this.rgx(document_start_indicator);
+        return this.got(this.rgx(document_start_indicator));
       }
 
       document_end_indicator() {
-        return this.rgx(document_end_indicator);
+        return this.got(this.rgx(document_end_indicator));
       }
 
       // [006]
@@ -156,20 +159,30 @@
       //     | block-mapping(n)
       //   )
       block_collection(n, c) {
-        // XXX Needed by receiver to get only a tag or anchor:
-        return this.all(this.rep('?', this.all([this.separation_characters, n + 1, c], this.check_node_properties, this.any(this.all([this.node_properties, n + 1, c], this.comment_lines), this.all(this.tag_property, this.comment_lines), this.all(this.anchor_property, this.comment_lines)))), this.comment_lines, this.any([this.block_sequence_context, n, c], [this.block_mapping, n]));
+        return this.all(this.rep('?', this.all([this.separation_characters, n + 1, c], this.check_node_properties, this.any(this.got(this.all([this.node_properties, n + 1, c], this.comment_lines), {
+          name: 'block_collection_properties',
+          not_: true
+        }), this.got(this.all(this.tag_property, this.comment_lines), {
+          name: 'block_collection_tag',
+          not_: true
+        }), this.got(this.all(this.anchor_property, this.comment_lines), {
+          name: 'block_collection_anchor',
+          not_: true
+        })))), this.comment_lines, this.any([this.block_sequence_context, n, c], [this.block_mapping, n]));
       }
 
       // [016]
       // block-sequence-context(n,BLOCK-OUT) ::= block-sequence(n-1)
       // block-sequence-context(n,BLOCK-IN)  ::= block-sequence(n)
       block_sequence_context(n, c) {
-        switch (c) {
-          case 'BLOCK-OUT':
-            return this.block_sequence(n - 1);
-          case 'BLOCK-IN':
-            return this.block_sequence(n);
-        }
+        return this.got(() => {
+          switch (c) {
+            case 'BLOCK-OUT':
+              return this.block_sequence(n - 1);
+            case 'BLOCK-IN':
+              return this.block_sequence(n);
+          }
+        }, try_got_not);
       }
 
       // [017]
@@ -198,7 +211,7 @@
         if (!(m = this.call([this.auto_detect_indent, n], 'number'))) {
           return false;
         }
-        return this.all(this.rep('+', this.all(this.indentation_spaces_n(n + m), [this.block_mapping_entry, n + m])));
+        return this.got(this.all(this.rep('+', this.all(this.indentation_spaces_n(n + m), [this.block_mapping_entry, n + m]))), try_got_not);
       }
 
       // [019]
@@ -217,7 +230,7 @@
       //     | empty-node
       //   )
       block_mapping_explicit_entry(n) {
-        return this.all([this.block_mapping_explicit_key, n], this.any([this.block_mapping_explicit_value, n], this.empty_node));
+        return this.got(this.all([this.block_mapping_explicit_key, n], this.any([this.block_mapping_explicit_value, n], this.empty_node)), try_got_not);
       }
 
       // [021]
@@ -245,7 +258,7 @@
       //   )
       //   block-mapping-implicit-value(n)
       block_mapping_implicit_entry(n) {
-        return this.all(this.any(this.block_mapping_implicit_key, this.empty_node), [this.block_mapping_implicit_value, n]);
+        return this.got(this.all(this.any(this.block_mapping_implicit_key, this.empty_node), [this.block_mapping_implicit_value, n]), try_got_not);
       }
 
       // XXX Can fold into 023
@@ -279,7 +292,7 @@
       //     block-mapping-entry(n)
       //   )*
       compact_mapping(n) {
-        return this.all([this.block_mapping_entry, n], this.rep('*', this.all(this.indentation_spaces_n(n), [this.block_mapping_entry, n])));
+        return this.got(this.all([this.block_mapping_entry, n], this.rep('*', this.all(this.indentation_spaces_n(n), [this.block_mapping_entry, n]))), try_got_not);
       }
 
       // [027]
@@ -333,7 +346,7 @@
       //     block-sequence-entry(n)
       //   )*
       compact_sequence(n) {
-        return this.all([this.block_sequence_entry, n], this.rep('*', this.all(this.indentation_spaces_n(n), [this.block_sequence_entry, n])));
+        return this.got(this.all([this.block_sequence_entry, n], this.rep('*', this.all(this.indentation_spaces_n(n), [this.block_sequence_entry, n]))), try_got_not);
       }
 
       // [031]
@@ -342,7 +355,7 @@
       //   block-scalar-indicators(t)
       //   literal-scalar-content(n+m,t)
       block_literal_scalar(n) {
-        return this.all(this.chr('|'), [this.block_scalar_indicators, n], [this.literal_scalar_content, this.add(n, this.m()), this.t()]);
+        return this.got(this.all(this.chr('|'), [this.block_scalar_indicators, n], [this.literal_scalar_content, this.add(n, this.m()), this.t()]), try_got_not);
       }
 
       // [032]
@@ -363,8 +376,7 @@
       //   indentation-spaces(n)
       //   non-break-character+
       literal_scalar_line_content(n) {
-        // XXX @all used to disambiguate @rgx capture:
-        return this.all(this.rep('*', [this.empty_line, n, "BLOCK-IN"]), this.indentation_spaces_n(n), this.all(this.rgx(RegExp(`${non_break_character}+`, "u"))));
+        return this.all(this.rep('*', [this.empty_line, n, "BLOCK-IN"]), this.indentation_spaces_n(n), this.got(this.rgx(RegExp(`${non_break_character}+`, "u"))));
       }
 
       // [034]
@@ -381,7 +393,7 @@
       //   block-scalar-indicators(t)
       //   folded-scalar-content(n+m,t)
       block_folded_scalar(n) {
-        return this.all(this.chr('>'), [this.block_scalar_indicators, n], [this.folded_scalar_content, this.add(n, this.m()), this.t()]);
+        return this.got(this.all(this.chr('>'), [this.block_scalar_indicators, n], [this.folded_scalar_content, this.add(n, this.m()), this.t()]), try_got_not);
       }
 
       // [036]
@@ -445,8 +457,7 @@
       //   non-space-character
       //   non-break-character*
       folded_scalar_text(n) {
-        // XXX @all used to disambiguate @rgx capture:
-        return this.all(this.indentation_spaces_n(n), this.all(this.rgx(RegExp(`${non_space_character}+${non_break_character}*`, "u"))));
+        return this.all(this.indentation_spaces_n(n), this.got(this.all(this.rgx(RegExp(`${non_space_character}+${non_break_character}*`, "u")))));
       }
 
       // [042]
@@ -463,7 +474,7 @@
       //   blank-character
       //   non-break-character*
       folded_scalar_spaced_text(n) {
-        return this.all(this.indentation_spaces_n(n), this.all(this.rgx(RegExp(`${blank_character}${non_break_character}*`, "u"))));
+        return this.all(this.indentation_spaces_n(n), this.got(this.rgx(RegExp(`${blank_character}${non_break_character}*`, "u"))));
       }
 
       // [044]
@@ -601,7 +612,11 @@
       //   flow-mapping-context(n,c)?
       //   '}'
       flow_mapping(n, c) {
-        return this.all(this.chr('{'), this.rep('?', [this.separation_characters, n, c]), this.rep('?', [this.flow_mapping_context, n, c]), this.chr('}'));
+        return this.all(this.got(this.chr('{'), {
+          name: 'flow_mapping_start'
+        }), this.rep('?', [this.separation_characters, n, c]), this.rep('?', [this.flow_mapping_context, n, c]), this.got(this.chr('}'), {
+          name: 'flow_mapping_end'
+        }));
       }
 
       // [057]
@@ -668,7 +683,7 @@
       //   empty-node
       //   flow-mapping-separate-value(n,c)
       flow_mapping_empty_key_entry(n, c) {
-        return this.all(this.empty_node, [this.flow_mapping_separate_value, n, c]);
+        return this.got(this.all(this.empty_node, [this.flow_mapping_separate_value, n, c]), try_got_not);
       }
 
       // [063]
@@ -723,7 +738,7 @@
       //     )
       //   | flow-pair-entry(n,c)
       flow_pair(n, c) {
-        return this.any(this.all(this.rgx(RegExp(`\\?${ws_lookahead}`)), [this.separation_characters, n, c], [this.flow_mapping_explicit_entry, n, c]), [this.flow_pair_entry, n, c]);
+        return this.got(this.any(this.all(this.rgx(RegExp(`\\?${ws_lookahead}`)), [this.separation_characters, n, c], [this.flow_mapping_explicit_entry, n, c]), [this.flow_pair_entry, n, c]), try_got_not);
       }
 
       // [067]
@@ -805,7 +820,11 @@
       //   flow-sequence-context(n,c)?
       //   ']'
       flow_sequence(n, c) {
-        return this.all(this.chr('['), this.rep('?', [this.separation_characters, n, c]), this.rep('?', [this.flow_sequence_context, n, c]), this.chr(']'));
+        return this.all(this.got(this.chr('['), {
+          name: 'flow_sequence_start'
+        }), this.rep('?', [this.separation_characters, n, c]), this.rep('?', [this.flow_sequence_context, n, c]), this.got(this.chr(']'), {
+          name: 'flow_sequence_end'
+        }));
       }
 
       // [075]
@@ -835,7 +854,7 @@
       //   double-quoted-text(n,c)
       //   '"'
       double_quoted_scalar(n, c) {
-        return this.all(this.chr('"'), [this.double_quoted_text, n, c], this.chr('"'));
+        return this.got(this.all(this.chr('"'), [this.double_quoted_text, n, c], this.chr('"')));
       }
 
       // [078]
@@ -951,7 +970,7 @@
       //   single-quoted-text(n,c)
       //   "'"
       single_quoted_scalar(n, c) {
-        return this.all(this.chr("'"), [this.single_quoted_text, n, c], this.chr("'"));
+        return this.got(this.all(this.chr("'"), [this.single_quoted_text, n, c], this.chr("'")));
       }
 
       // [089]
@@ -989,12 +1008,12 @@
       // flow-plain-scalar(n,BLOCK-KEY) ::= plain-scalar-single-line(BLOCK-KEY)
       // flow-plain-scalar(n,FLOW-KEY)  ::= plain-scalar-single-line(FLOW-KEY)
       flow_plain_scalar(n, c) {
-        return this.case(c, {
+        return this.got(this.case(c, {
           'BLOCK-KEY': [this.plain_scalar_single_line, c],
           'FLOW-IN': [this.plain_scalar_multi_line, n, c],
           'FLOW-KEY': [this.plain_scalar_single_line, c],
           'FLOW-OUT': [this.plain_scalar_multi_line, n, c]
-        });
+        }));
       }
 
       // [098]
@@ -1133,14 +1152,14 @@
       //   '*'
       //   anchor-name
       alias_node() {
-        return this.rgx(RegExp(`\\*${anchor_name}`, "u"));
+        return this.got(this.rgx(RegExp(`\\*${anchor_name}`, "u")));
       }
 
       // [108]
       // empty-node ::=
       //   ""
       empty_node() {
-        return this.empty;
+        return this.got(this.empty);
       }
 
       // [109]
@@ -1265,7 +1284,7 @@
       //   )
       //   break-as-line-feed
       empty_line(n, c) {
-        return this.all(this.any([this.line_prefix_spaces, n, c], [this.indentation_spaces_less_than, n]), this.rgx(break_as_line_feed));
+        return this.got(this.all(this.any([this.line_prefix_spaces, n, c], [this.indentation_spaces_less_than, n]), this.rgx(break_as_line_feed)));
       }
 
       // [121]
@@ -1316,7 +1335,7 @@
       //   '.'
       //   decimal-digit+
       yaml_version_number() {
-        return this.rgx(RegExp(`${decimal_digit}+\\.${decimal_digit}+`));
+        return this.got(this.rgx(RegExp(`${decimal_digit}+\\.${decimal_digit}+`)));
       }
 
       // [126]
@@ -1342,7 +1361,7 @@
       }
 
       tag_handle() {
-        return this.rgx(tag_handle);
+        return this.got(this.rgx(tag_handle));
       }
 
       // [134]
@@ -1350,7 +1369,7 @@
       //     local-tag-prefix
       //   | global-tag-prefix
       tag_prefix() {
-        return this.rgx(RegExp(`(?:${local_tag_prefix}|${global_tag_prefix})`));
+        return this.got(this.rgx(RegExp(`(?:${local_tag_prefix}|${global_tag_prefix})`)));
       }
 
       check_node_properties() {
@@ -1370,7 +1389,7 @@
       //   '&'
       //   anchor-name
       anchor_property() {
-        return this.rgx(RegExp(`&${anchor_name}`, "u"));
+        return this.got(this.rgx(RegExp(`&${anchor_name}`, "u")));
       }
 
       // [141]
@@ -1379,7 +1398,7 @@
       //   | shorthand-tag
       //   | non-specific-tag
       tag_property() {
-        return this.rgx(RegExp(`${verbatim_tag}|${shorthand_tag}|${non_specific_tag}`));
+        return this.got(this.rgx(RegExp(`${verbatim_tag}|${shorthand_tag}|${non_specific_tag}`)));
       }
 
       // [145]
@@ -1425,6 +1444,12 @@
     init = function(id, func) {
       inits[id] = func;
       return '';
+    };
+
+    try_got_not = {
+      try_: true,
+      got_: true,
+      not_: true
     };
 
     // [002]

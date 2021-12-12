@@ -25,6 +25,11 @@ global.Grammar = class Grammar
     inits[id] = func
     ''
 
+  try_got_not =
+    try_: true
+    got_: true
+    not_: true
+
 
   # Grammar rules:
 
@@ -45,24 +50,29 @@ global.Grammar = class Grammar
   #     | start-indicator-and-document
   #   )*
 
-  yaml_stream: -> @all(
-    @rep('*', @document_prefix)
-    @rep('?', @any_document)
-    @rep('*',
-      @any(
-        @all(
-          @rep('+', @document_suffix)
-          @rep('*', @document_prefix)
-          @rep('?', @any_document)
+  yaml_stream: ->
+    @got(
+      @all(
+        @rep('*', @document_prefix)
+        @rep('?', @any_document)
+        @rep('*',
+          @any(
+            @all(
+              @rep('+', @document_suffix)
+              @rep('*', @document_prefix)
+              @rep('?', @any_document)
+            )
+            @rgx(///
+              #{byte_order_mark}
+              #{comment_line}
+            ///u)
+            @start_indicator_and_document
+          )
         )
-        @rgx(///
-          #{byte_order_mark}
-          #{comment_line}
-        ///u)
-        @start_indicator_and_document
       )
+      try_: true
+      got_: true
     )
-  )
 
 
 
@@ -106,7 +116,9 @@ global.Grammar = class Grammar
     ///
 
   document_start_indicator: ->
-    @rgx(document_start_indicator)
+    @got(
+      @rgx(document_start_indicator)
+    )
 
 
 
@@ -119,7 +131,9 @@ global.Grammar = class Grammar
   ///
 
   document_end_indicator: ->
-    @rgx(document_end_indicator)
+    @got(
+      @rgx(document_end_indicator)
+    )
 
 
 
@@ -304,19 +318,31 @@ global.Grammar = class Grammar
           [ @separation_characters, n + 1, c ]
           @check_node_properties
           @any(
-            @all(
-              [ @node_properties, n + 1, c ]
-              @comment_lines
+            @got(
+              @all(
+                [ @node_properties, n + 1, c ]
+                @comment_lines
+              )
+              name: 'block_collection_properties'
+              not_: true
             )
 
-            # XXX Needed by receiver to get only a tag or anchor:
-            @all(
-              @tag_property
-              @comment_lines
+            @got(
+              @all(
+                @tag_property
+                @comment_lines
+              )
+              name: 'block_collection_tag'
+              not_: true
             )
-            @all(
-              @anchor_property
-              @comment_lines
+
+            @got(
+              @all(
+                @anchor_property
+                @comment_lines
+              )
+              name: 'block_collection_anchor'
+              not_: true
             )
           )
         )
@@ -335,9 +361,13 @@ global.Grammar = class Grammar
   # block-sequence-context(n,BLOCK-IN)  ::= block-sequence(n)
 
   block_sequence_context: (n, c)->
-    switch c
-      when 'BLOCK-OUT' then @block_sequence(n - 1)
-      when 'BLOCK-IN' then @block_sequence(n)
+    @got(
+      =>
+        switch c
+          when 'BLOCK-OUT' then @block_sequence(n - 1)
+          when 'BLOCK-IN' then @block_sequence(n)
+      try_got_not
+    )
 
 
 
@@ -379,13 +409,16 @@ global.Grammar = class Grammar
 
   block_mapping: (n)->
     return false unless m = @call [@auto_detect_indent, n], 'number'
-    @all(
-      @rep('+',
-        @all(
-          @indentation_spaces_n(n + m)
-          [ @block_mapping_entry, n + m ]
+    @got(
+      @all(
+        @rep('+',
+          @all(
+            @indentation_spaces_n(n + m)
+            [ @block_mapping_entry, n + m ]
+          )
         )
       )
+      try_got_not
     )
 
 
@@ -412,12 +445,15 @@ global.Grammar = class Grammar
   #   )
 
   block_mapping_explicit_entry: (n)->
-    @all(
-      [ @block_mapping_explicit_key, n ]
-      @any(
-        [ @block_mapping_explicit_value, n ]
-        @empty_node
+    @got(
+      @all(
+        [ @block_mapping_explicit_key, n ]
+        @any(
+          [ @block_mapping_explicit_value, n ]
+          @empty_node
+        )
       )
+      try_got_not
     )
 
 
@@ -465,12 +501,15 @@ global.Grammar = class Grammar
   #   block-mapping-implicit-value(n)
 
   block_mapping_implicit_entry: (n)->
-    @all(
-      @any(
-        @block_mapping_implicit_key
-        @empty_node
+    @got(
+      @all(
+        @any(
+          @block_mapping_implicit_key
+          @empty_node
+        )
+        [ @block_mapping_implicit_value, n ]
       )
-      [ @block_mapping_implicit_value, n ]
+      try_got_not
     )
 
 
@@ -526,14 +565,17 @@ global.Grammar = class Grammar
   #   )*
 
   compact_mapping: (n)->
-    @all(
-      [ @block_mapping_entry, n ]
-      @rep('*',
-        @all(
-          @indentation_spaces_n(n)
-          [ @block_mapping_entry, n ]
+    @got(
+      @all(
+        [ @block_mapping_entry, n ]
+        @rep('*',
+          @all(
+            @indentation_spaces_n(n)
+            [ @block_mapping_entry, n ]
+          )
         )
       )
+      try_got_not
     )
 
 
@@ -619,14 +661,17 @@ global.Grammar = class Grammar
   #   )*
 
   compact_sequence: (n)->
-    @all(
-      [ @block_sequence_entry, n ]
-      @rep('*',
-        @all(
-          @indentation_spaces_n(n)
-          [ @block_sequence_entry, n ]
+    @got(
+      @all(
+        [ @block_sequence_entry, n ]
+        @rep('*',
+          @all(
+            @indentation_spaces_n(n)
+            [ @block_sequence_entry, n ]
+          )
         )
       )
+      try_got_not
     )
 
 
@@ -638,10 +683,13 @@ global.Grammar = class Grammar
   #   literal-scalar-content(n+m,t)
 
   block_literal_scalar: (n)->
-    @all(
-      @chr('|')
-      [ @block_scalar_indicators, n ]
-      [ @literal_scalar_content, @add(n, @m()), @t() ]
+    @got(
+      @all(
+        @chr('|')
+        [ @block_scalar_indicators, n ]
+        [ @literal_scalar_content, @add(n, @m()), @t() ]
+      )
+      try_got_not
     )
 
 
@@ -679,8 +727,7 @@ global.Grammar = class Grammar
     @all(
       @rep('*', [ @empty_line, n, "BLOCK-IN" ])
       @indentation_spaces_n(n)
-      # XXX @all used to disambiguate @rgx capture:
-      @all(
+      @got(
         @rgx(/// #{non_break_character}+ ///u)
       )
     )
@@ -707,10 +754,13 @@ global.Grammar = class Grammar
   #   folded-scalar-content(n+m,t)
 
   block_folded_scalar: (n)->
-    @all(
-      @chr('>')
-      [ @block_scalar_indicators, n ]
-      [ @folded_scalar_content, @add(n, @m()), @t() ]
+    @got(
+      @all(
+        @chr('>')
+        [ @block_scalar_indicators, n ]
+        [ @folded_scalar_content, @add(n, @m()), @t() ]
+      )
+      try_got_not
     )
 
 
@@ -827,12 +877,13 @@ global.Grammar = class Grammar
   folded_scalar_text: (n)->
     @all(
       @indentation_spaces_n(n)
-      # XXX @all used to disambiguate @rgx capture:
-      @all(
-        @rgx(///
-          #{non_space_character}+
-          #{non_break_character}*
-        ///u)
+      @got(
+        @all(
+          @rgx(///
+            #{non_space_character}+
+            #{non_break_character}*
+          ///u)
+        )
       )
     )
 
@@ -860,7 +911,7 @@ global.Grammar = class Grammar
   folded_scalar_spaced_text: (n)->
     @all(
       @indentation_spaces_n(n)
-      @all(
+      @got(
         @rgx(///
           #{blank_character}
           #{non_break_character}*
@@ -1089,10 +1140,16 @@ global.Grammar = class Grammar
 
   flow_mapping: (n, c)->
     @all(
-      @chr('{')
+      @got(
+        @chr('{')
+        name: 'flow_mapping_start'
+      )
       @rep('?', [ @separation_characters, n, c ])
       @rep('?', [ @flow_mapping_context, n, c ])
-      @chr('}')
+      @got(
+        @chr('}')
+        name: 'flow_mapping_end'
+      )
     )
 
 
@@ -1211,9 +1268,12 @@ global.Grammar = class Grammar
   #   flow-mapping-separate-value(n,c)
 
   flow_mapping_empty_key_entry: (n, c)->
-    @all(
-      @empty_node
-      [ @flow_mapping_separate_value, n, c ]
+    @got(
+      @all(
+        @empty_node
+        [ @flow_mapping_separate_value, n, c ]
+      )
+      try_got_not
     )
 
 
@@ -1309,16 +1369,19 @@ global.Grammar = class Grammar
   #   | flow-pair-entry(n,c)
 
   flow_pair: (n, c)->
-    @any(
-      @all(
-        @rgx(///
-          \?
-          #{ws_lookahead}
-        ///)
-        [ @separation_characters, n, c ]
-        [ @flow_mapping_explicit_entry, n, c ]
+    @got(
+      @any(
+        @all(
+          @rgx(///
+            \?
+            #{ws_lookahead}
+          ///)
+          [ @separation_characters, n, c ]
+          [ @flow_mapping_explicit_entry, n, c ]
+        )
+        [ @flow_pair_entry, n, c ]
       )
-      [ @flow_pair_entry, n, c ]
+      try_got_not
     )
 
 
@@ -1457,10 +1520,16 @@ global.Grammar = class Grammar
 
   flow_sequence: (n, c)->
     @all(
-      @chr('[')
+      @got(
+        @chr('[')
+        name: 'flow_sequence_start'
+      )
       @rep('?', [ @separation_characters, n, c ])
       @rep('?', [ @flow_sequence_context, n, c ])
-      @chr(']')
+      @got(
+        @chr(']')
+        name: 'flow_sequence_end'
+      )
     )
 
 
@@ -1510,10 +1579,12 @@ global.Grammar = class Grammar
   #   '"'
 
   double_quoted_scalar: (n, c)->
-    @all(
-      @chr('"')
-      [ @double_quoted_text, n, c ]
-      @chr('"')
+    @got(
+      @all(
+        @chr('"')
+        [ @double_quoted_text, n, c ]
+        @chr('"')
+      )
     )
 
 
@@ -1710,10 +1781,12 @@ global.Grammar = class Grammar
   #   "'"
 
   single_quoted_scalar: (n, c)->
-    @all(
-      @chr("'")
-      [ @single_quoted_text, n, c ]
-      @chr("'")
+    @got(
+      @all(
+        @chr("'")
+        [ @single_quoted_text, n, c ]
+        @chr("'")
+      )
     )
 
 
@@ -1869,11 +1942,13 @@ global.Grammar = class Grammar
   # flow-plain-scalar(n,FLOW-KEY)  ::= plain-scalar-single-line(FLOW-KEY)
 
   flow_plain_scalar: (n, c)->
-    @case c,
-      'BLOCK-KEY': [ @plain_scalar_single_line, c ]
-      'FLOW-IN': [ @plain_scalar_multi_line, n, c ]
-      'FLOW-KEY': [ @plain_scalar_single_line, c ]
-      'FLOW-OUT': [ @plain_scalar_multi_line, n, c ]
+    @got(
+      @case c,
+        'BLOCK-KEY': [ @plain_scalar_single_line, c ]
+        'FLOW-IN': [ @plain_scalar_multi_line, n, c ]
+        'FLOW-KEY': [ @plain_scalar_single_line, c ]
+        'FLOW-OUT': [ @plain_scalar_multi_line, n, c ]
+    )
 
 
 
@@ -2096,10 +2171,12 @@ global.Grammar = class Grammar
   #   anchor-name
 
   alias_node: ->
-    @rgx(///
-      \*
-      #{anchor_name}
-    ///u)
+    @got(
+      @rgx(///
+        \*
+        #{anchor_name}
+      ///u)
+    )
 
 
 
@@ -2108,7 +2185,9 @@ global.Grammar = class Grammar
   #   ""
 
   empty_node: ->
-    @empty
+    @got(
+      @empty
+    )
 
 
 
@@ -2320,12 +2399,14 @@ global.Grammar = class Grammar
   #   break-as-line-feed
 
   empty_line: (n, c)->
-    @all(
-      @any(
-        [ @line_prefix_spaces, n, c ]
-        [ @indentation_spaces_less_than, n ]
+    @got(
+      @all(
+        @any(
+          [ @line_prefix_spaces, n, c ]
+          [ @indentation_spaces_less_than, n ]
+        )
+        @rgx(break_as_line_feed)
       )
-      @rgx(break_as_line_feed)
     )
 
 
@@ -2409,11 +2490,13 @@ global.Grammar = class Grammar
   #   decimal-digit+
 
   yaml_version_number: ->
-    @rgx(///
-      #{decimal_digit}+
-      \.
-      #{decimal_digit}+
-    ///)
+    @got(
+      @rgx(///
+        #{decimal_digit}+
+        \.
+        #{decimal_digit}+
+      ///)
+    )
 
 
 
@@ -2495,7 +2578,9 @@ global.Grammar = class Grammar
     ///
 
   tag_handle: ->
-    @rgx(tag_handle)
+    @got(
+      @rgx(tag_handle)
+    )
 
 
 
@@ -2538,12 +2623,14 @@ global.Grammar = class Grammar
   #   | global-tag-prefix
 
   tag_prefix: ->
-    @rgx(///
-      (?:
-        #{local_tag_prefix}
-      | #{global_tag_prefix}
-      )
-    ///)
+    @got(
+      @rgx(///
+        (?:
+          #{local_tag_prefix}
+        | #{global_tag_prefix}
+        )
+      ///)
+    )
 
 
 
@@ -2627,10 +2714,12 @@ global.Grammar = class Grammar
   #   anchor-name
 
   anchor_property: ->
-    @rgx(///
-      &
-      #{anchor_name}
-    ///u)
+    @got(
+      @rgx(///
+        &
+        #{anchor_name}
+      ///u)
+    )
 
 
 
@@ -2671,11 +2760,13 @@ global.Grammar = class Grammar
   #   | non-specific-tag
 
   tag_property: ->
-    @rgx(///
-        #{verbatim_tag}
-      | #{shorthand_tag}
-      | #{non_specific_tag}
-    ///)
+    @got(
+      @rgx(///
+          #{verbatim_tag}
+        | #{shorthand_tag}
+        | #{non_specific_tag}
+      ///)
+    )
 
 
 
