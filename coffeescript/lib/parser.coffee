@@ -9,6 +9,8 @@ require './grammar'
 TRACE = Boolean ENV.TRACE
 DEBUG = Boolean ENV.DEBUG
 
+global.calls = {}
+
 global.Parser = class Parser extends Grammar
 
   constructor: (receiver)->
@@ -20,6 +22,7 @@ global.Parser = class Parser extends Grammar
     @state = []
 
     if TRACE
+      @call = @call_trace
       @trace_num = 0
       @trace_line = 0
       @trace_on = true
@@ -74,59 +77,79 @@ global.Parser = class Parser extends Grammar
 
   state_pop: ->
     child = @state.pop()
-    curr = @state_curr()
-    return unless curr?
-    curr.beg = child.beg
-    curr.end = @pos
+    if (curr = @state_curr())?
+      curr.beg = child.beg
+      curr.end = @pos
 
-  call: (func, type='boolean')->
-    args = []
-    [func, args...] = func if isArray func
-
-    if isNumber(func) or isString(func)
-      return func
-
-    FAIL "Bad call type '#{typeof_ func}' for '#{func}'" \
-      unless isFunction func
+  # This is the dispatch function that calls all the grammar functions.
+  # It should be as fast as possible.
+  call: (func)->
+    if func instanceof Array
+      [func, args...] = func
+    else
+      args = []
 
     @state_push(func.name)
 
-    if TRACE
-      trace = func.trace ?= func.name
+    args = args.map (a)->
+      if typeof(a) == 'function'
+        a()
+      else
+        a
+
+    value = func.apply(@, args)
+    while typeof(value) == 'function' or value instanceof Array
+      value = @call value
+
+    @state_pop()
+
+    return value
+
+  # To make the 'call' method as fast as possible, a tracing version of it is
+  # here. The 'do =>' blocks contain the tracing code, to stand out visually.
+  call_trace: (func)->
+    if func instanceof Array
+      [func, args...] = func
+    else
+      args = []
+
+    do =>
+      FAIL "Bad call type '#{typeof_ func}' for '#{func}'" \
+        unless isFunction func
+
+    @state_push(func.name)
+
+    trace = func.trace ?= func.name
+    do =>
+      calls[trace] ?= 0
+      calls[trace]++
+
       @trace_num++
       @trace '?', trace, args
 
-    if func.name == 'bare_document'
-      @state_curr().doc = true
+    args = args.map (a)->
+      if typeof(a) == 'function'
+        a()
+      else
+        a
 
-    args = args.map (a)=>
-      if isArray(a) then @call(a, 'any') else \
-      if isFunction(a) then a() else \
-      a
-
-    pos = @pos
-
-    if DEBUG && func.name.match /_\w/
-      debug_rule func.name, args...
+    do =>
+      if DEBUG && func.name.match /_\w/
+        debug_rule func.name, args...
 
     value = func.apply(@, args)
-    while isFunction(value) or isArray(value)
+    while typeof(value) == 'function' or value instanceof Array
       value = @call value
 
-    FAIL "Calling '#{func.name}' returned '#{typeof_ value}' instead of '#{type}'" \
-      if type != 'any' and typeof_(value) != type
-
-    if TRACE
+    do =>
       @trace_num++
-      if type != 'boolean'
-        @trace '>', value
+      if value
+        @trace '+', trace
       else
-        if value
-          @trace '+', trace
-        else
-          @trace 'x', trace
+        @trace 'x', trace
 
     @state_pop()
+
     return value
 
   got: (rule, {name, try_, got_, not_} = {})->
@@ -148,18 +171,17 @@ global.Parser = class Parser extends Grammar
     =>
       pos = @pos
 
-      if try_
-        try_func.call @receiver,
-          text: @input[pos...@pos]
-          state: @state_curr()
-          start: pos
-
-      value = @call(rule)
-
       context =
         text: @input[pos...@pos]
         state: @state_curr()
         start: pos
+
+      if try_
+        try_func.call(@receiver, context)
+
+      value = @call(rule)
+
+      context.text = @input[pos...@pos]
 
       if value
         if got_
@@ -177,7 +199,7 @@ global.Parser = class Parser extends Grammar
     all = ->
       pos = @pos
       for func in funcs
-        FAIL '*** Missing function in @all group:', funcs \
+        FAIL "*** Missing function in @all group: #{func}" \
           unless func?
 
         if not @call func
@@ -218,45 +240,34 @@ global.Parser = class Parser extends Grammar
       return false
     name_ 'rep', rep, "rep(#{quant})"
 
-  # Call a rule depending on state value:
-  case: (var_, map)->
-    case_ = ->
-      rule = map[var_]
-      rule? or
-        FAIL "Can't find '#{var_}' in:", map
-      @call rule
-    name_ 'case', case_, "case(#{var_},#{stringify map})"
-
-  # Call a rule depending on state value:
-  flip: (var_, map)->
-    value = map[var_]
-    value? or
-      FAIL "Can't find '#{var_}' in:", map
-    return value if isString value
-    return @call value, 'number'
-
   # Check for end for doc or stream:
   the_end: ->
     return (
       @pos >= @end or (
-        @state_curr().doc and
-        @start_of_line() and
+        @state_curr().doc and (
+          @pos == 0 or
+          @input[@pos - 1] == "\n"
+        ) and
         @input[@pos..].match /^(?:---|\.\.\.)(?=\s|$)/
       )
     )
 
+  make = memoize (regex)->
+    on_end = !! regex.match(/\)[\?\*]\/[muy]*$/)
+    die_ regex if regex.match(/y$/)
+    regex = regex[0..-2] if regex.endsWith('u')
+    regex = regex
+      .replace(/\(([:!=]|<=)/g, '(?$1')
+    regex = String(regex)[1..-2]
+      .replace(/\((?!\?)/g, '(?:')
+    regex = /// (?: #{regex} ) ///yum
+    return [regex, on_end]
+
   # Match a regex:
   rgx: (regex, debug=false)->
     regex = /// #{regex} ///u unless isRegex regex
-    str = String(regex)
-    on_end = !! str.match(/\)[\?\*]\/[muy]*$/)
-    die_ str if str.match(/y$/)
-    str = str[0..-2] if str.endsWith('u')
-    str = String(str)[1..-2]
-      .replace(/\((?!\?)/g, '(?:')
-    regex = /// (?: #{str} ) ///yum
-
-    die regex if debug
+    regex = String(regex)
+    [regex, on_end] = make(regex)
 
     rgx = ->
       return on_end if @the_end()
@@ -314,9 +325,11 @@ global.Parser = class Parser extends Grammar
 
   set: (var_, expr)->
     set = =>
-      value = @call expr, 'any'
+      if isString expr
+        value = expr
+      else
+        value = @call expr
       return false if value == -1
-      value = @auto_detect() if value == 'auto-detect'
       state = @state_prev()
       state[var_] = value
       if state.name != 'all'
@@ -324,32 +337,19 @@ global.Parser = class Parser extends Grammar
         i = 3
         while i < size
           FAIL "failed to traverse state stack in 'set'" \
-            if i > size - 2
+            if i > size - 1
           state = @state[size - i++ - 1]
           state[var_] = value
           break if state.name == 'block_scalar'
       return true
     name_ 'set', set, "set('#{var_}', #{stringify expr})"
 
-  max: (max)->
-    max = ->
-      return true
+#   max: (max)->
+#     max = ->
+#       return true
 
   exclude: (rule)->
-    exclude = ->
-      return true
-
-  add: (x, y)->
-    add = =>
-      y = @call y, 'number' if isFunction y
-      FAIL "y is '#{stringify y}', not number in 'add'" \
-        unless isNumber y
-      return x + y
-    name_ 'add', add, "add(#{x},#{stringify y})"
-
-  sub: (x, y)->
-    sub = ->
-      return x - y
+    exclude = -> true
 
   # This method does not need to return a function since it is never
   # called in the grammar.
@@ -365,42 +365,40 @@ global.Parser = class Parser extends Grammar
 
   len: (str)->
     len = ->
-      str = @call str, 'string' unless isString str
+      str = @call str unless isString str
       return str.length
 
   ord: (str)->
     ord = ->
-      str = @call str, 'string' unless isString str
+      str = @call str unless isString str
       return str.charCodeAt(0) - 48
 
   if: (test, do_if_true, do_if_false)->
     if_ = ->
-      test = @call test, 'boolean' unless isBoolean test
+      test = @call test unless isBoolean test
       if test
         @call do_if_true
         return true
-      # if do_if_false?
-      #   @call do_if_false
       return false
     name_ 'if', if_
 
   lt: (x, y)->
     lt = ->
-      x = @call x, 'number' unless isNumber x
-      y = @call y, 'number' unless isNumber y
+      x = @call x unless isNumber x
+      y = @call y unless isNumber y
       return x < y
     name_ 'lt', lt, "lt(#{stringify x},#{stringify y})"
 
   le: (x, y)->
     le = ->
-      x = @call x, 'number' unless isNumber x
-      y = @call y, 'number' unless isNumber y
+      x = @call x unless isNumber x
+      y = @call y unless isNumber y
       return x <= y
     name_ 'le', le, "le(#{stringify x},#{stringify y})"
 
-  m: ->
+  m: (n=0)->
     m = =>
-      return @state_curr().m
+      return @state_curr().m + n
 
   t: ->
     t = =>
@@ -409,14 +407,6 @@ global.Parser = class Parser extends Grammar
 #------------------------------------------------------------------------------
 # Special grammar rules
 #------------------------------------------------------------------------------
-  start_of_line: ->
-    return @pos == 0 or
-      @pos >= @end or
-      @input[@pos - 1] == "\n"
-
-  end_of_input: ->
-    return @pos >= @end
-
   empty: -> true
 
   auto_detect_indent: (n)->

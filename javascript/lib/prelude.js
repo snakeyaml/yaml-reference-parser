@@ -4,6 +4,8 @@
 
   global.ENV = process.env;
 
+  global.memoize = require('moize').maxSize(50);
+
   global.name_ = function(name, func, trace) {
     var f;
     func.trace = trace || name;
@@ -116,7 +118,7 @@
 
   global.FAIL = function(...o) {
     WWW(o);
-    return die(`FAIL '${o[0] || '???'}'`);
+    return die_(`FAIL '${o[0] || '???'}'`);
   };
 
   global.timer = function(start = null) {

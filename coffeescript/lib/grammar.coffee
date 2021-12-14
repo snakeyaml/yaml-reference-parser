@@ -1,5 +1,4 @@
 global.Grammar = class Grammar
-
   # Helper functions:
 
   # Generate required regular expression and string variants:
@@ -7,7 +6,7 @@ global.Grammar = class Grammar
     str = String(rgx)
 
     # XXX Can remove when stable:
-    if str.match(/undefined/)
+    if str.match(/>>\d+<</)
       die_ "Bad regex '#{rgx}'"
     if str.match(/\/mu?y?$/)
       die_ "make(#{str}) expression should not use 'm' flag"
@@ -15,20 +14,25 @@ global.Grammar = class Grammar
     str = str[0..-2] if str.endsWith('u')
     str = String(str)[1..-2]
     chars = str[1..-2]
+    str = str
+      .replace(/\(([:!=]|<=)/g, '(?$1')
     return [ str, chars ]
 
   start_of_line = '^'
   end_of_input = '(?!.|\\n)'
 
-  inits = {}
-  init = (id, func) ->
-    inits[id] = func
-    ''
+  inits = []
+  init = (func, pos)->
+    line = (new Error()).stack.split("\n")[2].split(':')[1]
+    line =">>#{line}<<"
 
-  try_got_not =
-    try_: true
-    got_: true
-    not_: true
+    if pos?
+      inits.splice(pos, 0, func)
+    else
+      inits.push(func)
+      return [line, line]
+
+  try_got_not = try_: true, got_: true, not_: true
 
 
   # Grammar rules:
@@ -81,7 +85,7 @@ global.Grammar = class Grammar
   #   byte-order-mark?
   #   blanks-and-comment-line*
 
-  [  document_prefix] = init 'x460', ->
+  [  document_prefix] = init ->
     [document_prefix] = make ///
       #{byte_order_mark}?
       #{blanks_and_comment_line}*
@@ -109,7 +113,7 @@ global.Grammar = class Grammar
   # document-start-indicator ::=
   #   "---"
 
-  [  document_start_indicator] = init 'x450', ->
+  [  document_start_indicator] = init ->
     [document_start_indicator] = make ///
       ---
       #{ws_lookahead}
@@ -196,9 +200,10 @@ global.Grammar = class Grammar
   #   /* Excluding forbidden-content */
 
   bare_document: ->
+    @state_curr().doc = true
     @all(
       @exclude(@forbidden_content)
-      [ @block_node, -1, "BLOCK-IN" ]
+      @block_node(-1, "BLOCK-IN")
     )
 
 
@@ -265,8 +270,8 @@ global.Grammar = class Grammar
 
   block_node: (n, c)->
     @any(
-      [ @block_node_in_a_block_node, n, c ]
-      [ @flow_node_in_a_block_node, n ]
+      @block_node_in_a_block_node(n, c)
+      @flow_node_in_a_block_node(n)
     )
 
 
@@ -278,8 +283,8 @@ global.Grammar = class Grammar
 
   block_node_in_a_block_node: (n, c)->
     @any(
-      [ @block_scalar, n, c ]
-      [ @block_collection, n, c ]
+      @block_scalar(n, c)
+      @block_collection(n, c)
     )
 
 
@@ -292,8 +297,8 @@ global.Grammar = class Grammar
 
   flow_node_in_a_block_node: (n)->
     @all(
-      [ @separation_characters, n + 1, "FLOW-OUT" ]
-      [ @flow_node, n + 1, "FLOW-OUT" ]
+      @separation_characters(n + 1, "FLOW-OUT")
+      @flow_node(n + 1, "FLOW-OUT")
       @comment_lines
     )
 
@@ -315,12 +320,12 @@ global.Grammar = class Grammar
     @all(
       @rep('?',
         @all(
-          [ @separation_characters, n + 1, c ]
+          @separation_characters(n + 1, c)
           @check_node_properties
           @any(
             @got(
               @all(
-                [ @node_properties, n + 1, c ]
+                @node_properties(n + 1, c)
                 @comment_lines
               )
               name: 'block_collection_properties'
@@ -349,8 +354,8 @@ global.Grammar = class Grammar
       )
       @comment_lines
       @any(
-        [ @block_sequence_context, n, c ]
-        [ @block_mapping, n ]
+        @block_sequence_context(n, c)
+        => @block_mapping(n)
       )
     )
 
@@ -365,7 +370,7 @@ global.Grammar = class Grammar
       =>
         switch c
           when 'BLOCK-OUT' then @block_sequence(n - 1)
-          when 'BLOCK-IN' then @block_sequence(n)
+          when 'BLOCK-IN'  then @block_sequence(n)
       try_got_not
     )
 
@@ -385,16 +390,16 @@ global.Grammar = class Grammar
 
   block_scalar: (n, c)->
     @all(
-      [ @separation_characters, n + 1, c ]
+      @separation_characters(n + 1, c)
       @rep('?',
         @all(
-          [ @node_properties, n + 1, c ]
-          [ @separation_characters, n + 1, c ]
+          @node_properties(n + 1, c)
+          @separation_characters(n + 1, c)
         )
       )
       @any(
-        [ @block_literal_scalar, n ]
-        [ @block_folded_scalar, n ]
+        @block_literal_scalar(n)
+        @block_folded_scalar(n)
       )
     )
 
@@ -414,7 +419,7 @@ global.Grammar = class Grammar
         @rep('+',
           @all(
             @indentation_spaces_n(n + m)
-            [ @block_mapping_entry, n + m ]
+            @block_mapping_entry(n + m)
           )
         )
       )
@@ -430,8 +435,8 @@ global.Grammar = class Grammar
 
   block_mapping_entry: (n)->
     @any(
-      [ @block_mapping_explicit_entry, n ]
-      [ @block_mapping_implicit_entry, n ]
+      @block_mapping_explicit_entry(n)
+      @block_mapping_implicit_entry(n)
     )
 
 
@@ -447,9 +452,9 @@ global.Grammar = class Grammar
   block_mapping_explicit_entry: (n)->
     @got(
       @all(
-        [ @block_mapping_explicit_key, n ]
+        @block_mapping_explicit_key(n)
         @any(
-          [ @block_mapping_explicit_value, n ]
+          @block_mapping_explicit_value(n)
           @empty_node
         )
       )
@@ -469,7 +474,7 @@ global.Grammar = class Grammar
         \?
         #{ws_lookahead}
       ///)
-      [ @block_indented_node, n, "BLOCK-OUT" ]
+      => @block_indented_node(n, "BLOCK-OUT")
     )
 
 
@@ -487,7 +492,7 @@ global.Grammar = class Grammar
         :
         #{ws_lookahead}
       ///)
-      [ @block_indented_node, n, "BLOCK-OUT" ]
+      => @block_indented_node(n, "BLOCK-OUT")
     )
 
 
@@ -507,7 +512,7 @@ global.Grammar = class Grammar
           @block_mapping_implicit_key
           @empty_node
         )
-        [ @block_mapping_implicit_value, n ]
+        @block_mapping_implicit_value(n)
       )
       try_got_not
     )
@@ -522,8 +527,8 @@ global.Grammar = class Grammar
 
   block_mapping_implicit_key: ->
     @any(
-      [ @implicit_json_key, "BLOCK-KEY" ],
-      [ @implicit_yaml_key, "BLOCK-KEY" ]
+      @implicit_json_key("BLOCK-KEY")
+      @implicit_yaml_key("BLOCK-KEY")
     )
 
 
@@ -546,7 +551,7 @@ global.Grammar = class Grammar
         #{ws_lookahead}
       ///)
       @any(
-        [ @block_node, n, "BLOCK-OUT" ]
+        @block_node(n, "BLOCK-OUT")
         @all(
           @empty_node
           @comment_lines
@@ -567,11 +572,11 @@ global.Grammar = class Grammar
   compact_mapping: (n)->
     @got(
       @all(
-        [ @block_mapping_entry, n ]
+        @block_mapping_entry(n)
         @rep('*',
           @all(
             @indentation_spaces_n(n)
-            [ @block_mapping_entry, n ]
+            @block_mapping_entry(n)
           )
         )
       )
@@ -588,12 +593,12 @@ global.Grammar = class Grammar
   #   )+
 
   block_sequence: (n)->
-    return false unless m = @call [@auto_detect_indent, n], 'number'
+    return false unless m = @auto_detect_indent(n)
     @all(
       @rep('+',
         @all(
           @indentation_spaces_n(n + m)
-          [ @block_sequence_entry, n + m ]
+          @block_sequence_entry(n + m)
         )
       )
     )
@@ -611,9 +616,9 @@ global.Grammar = class Grammar
       @rgx(///
         -
         #{ws_lookahead}
-        (?! #{non_space_character} )
+        (! #{non_space_character} )
       ///u)
-      [ @block_indented_node, n, "BLOCK-IN" ]
+      => @block_indented_node(n, "BLOCK-IN")
     )
 
 
@@ -634,16 +639,16 @@ global.Grammar = class Grammar
   #     )
 
   block_indented_node: (n, c)->
-    m = @call [@auto_detect_indent, n], 'number'
+    m = @auto_detect_indent(n)
     @any(
       @all(
         @indentation_spaces_n(m)
         @any(
-          [ @compact_sequence, n + 1 + m ]
-          [ @compact_mapping, n + 1 + m ]
+          @compact_sequence(n + 1 + m)
+          @compact_mapping(n + 1 + m)
         )
       )
-      [ @block_node, n, c ]
+      @block_node(n, c)
       @all(
         @empty_node
         @comment_lines
@@ -663,11 +668,11 @@ global.Grammar = class Grammar
   compact_sequence: (n)->
     @got(
       @all(
-        [ @block_sequence_entry, n ]
+        @block_sequence_entry(n)
         @rep('*',
           @all(
             @indentation_spaces_n(n)
-            [ @block_sequence_entry, n ]
+            @block_sequence_entry(n)
           )
         )
       )
@@ -686,8 +691,8 @@ global.Grammar = class Grammar
     @got(
       @all(
         @chr('|')
-        [ @block_scalar_indicators, n ]
-        [ @literal_scalar_content, @add(n, @m()), @t() ]
+        @block_scalar_indicators(n)
+        @literal_scalar_content(@m(n), @t())
       )
       try_got_not
     )
@@ -725,7 +730,7 @@ global.Grammar = class Grammar
 
   literal_scalar_line_content: (n)->
     @all(
-      @rep('*', [ @empty_line, n, "BLOCK-IN" ])
+      @rep('*', @empty_line(n, "BLOCK-IN"))
       @indentation_spaces_n(n)
       @got(
         @rgx(/// #{non_break_character}+ ///u)
@@ -742,7 +747,7 @@ global.Grammar = class Grammar
   literal_scalar_next_line: (n)->
     @all(
       @rgx(break_as_line_feed)
-      [ @literal_scalar_line_content, n ]
+      @literal_scalar_line_content(n)
     )
 
 
@@ -757,8 +762,8 @@ global.Grammar = class Grammar
     @got(
       @all(
         @chr('>')
-        [ @block_scalar_indicators, n ]
-        [ @folded_scalar_content, @add(n, @m()), @t() ]
+        @block_scalar_indicators(n)
+        @folded_scalar_content(@m(n), @t())
       )
       try_got_not
     )
@@ -777,7 +782,7 @@ global.Grammar = class Grammar
     @all(
       @rep('?',
         @all(
-          [ @folded_scalar_lines_different_indentation, n ]
+          @folded_scalar_lines_different_indentation(n)
           @rgx(line_ending)
         )
       )
@@ -796,11 +801,11 @@ global.Grammar = class Grammar
 
   folded_scalar_lines_different_indentation: (n)->
     @all(
-      [ @folded_scalar_lines_same_indentation, n ]
+      @folded_scalar_lines_same_indentation(n)
       @rep('*',
         @all(
           @rgx(break_as_line_feed)
-          [ @folded_scalar_lines_same_indentation, n ]
+          @folded_scalar_lines_same_indentation(n)
         )
       )
     )
@@ -817,7 +822,7 @@ global.Grammar = class Grammar
 
   folded_scalar_lines_same_indentation: (n)->
     @all(
-      @rep('*', [ @empty_line, n, "BLOCK-IN" ])
+      @rep('*', @empty_line(n, "BLOCK-IN"))
       @any(
         [ @folded_scalar_lines, n ]
         [ @folded_scalar_spaced_lines, n ]
@@ -857,11 +862,11 @@ global.Grammar = class Grammar
 
   folded_scalar_spaced_lines: (n)->
     @all(
-      [ @folded_scalar_spaced_text, n ]
+      @folded_scalar_spaced_text(n)
       @rep('*',
         @all(
-          [ @line_break_and_empty_lines, n ]
-          [ @folded_scalar_spaced_text, n ]
+          @line_break_and_empty_lines(n)
+          @folded_scalar_spaced_text(n)
         )
       )
     )
@@ -878,12 +883,10 @@ global.Grammar = class Grammar
     @all(
       @indentation_spaces_n(n)
       @got(
-        @all(
-          @rgx(///
-            #{non_space_character}+
-            #{non_break_character}*
-          ///u)
-        )
+        @rgx(///
+          #{non_space_character}+
+          #{non_break_character}*
+        ///u)
       )
     )
 
@@ -897,7 +900,7 @@ global.Grammar = class Grammar
   line_break_and_empty_lines: (n)->
     @all(
       @rgx(break_as_line_feed)
-      @rep('*', [ @empty_line, n, "BLOCK-IN" ])
+      @rep('*', @empty_line(n, "BLOCK-IN"))
     )
 
 
@@ -939,13 +942,13 @@ global.Grammar = class Grammar
     @all(
       @any(
         @all(
-          [ @block_scalar_indentation_indicator, n ]
+          => @block_scalar_indentation_indicator(n)
           @block_scalar_chomping_indicator
           @ws_lookahead     # TODO This might be needed in spec
         )
         @all(
           @block_scalar_chomping_indicator
-          [ @block_scalar_indentation_indicator, n ]
+          => @block_scalar_indentation_indicator(n)
         )
       )
       @comment_line
@@ -960,7 +963,7 @@ global.Grammar = class Grammar
   block_scalar_indentation_indicator: (n)->
     @any(
       @if(@rgx(decimal_digit_1_9), @set('m', @ord(@match)))
-      @if(@empty, @set('m', [ @auto_detect, n ]))
+      @if(@empty, @set('m', => @auto_detect(n)))
     )
 
 
@@ -998,8 +1001,8 @@ global.Grammar = class Grammar
   block_scalar_chomp_empty: (n, t)->
     switch t
       when 'STRIP' then @line_strip_empty(n)
-      when 'CLIP' then @line_strip_empty(n)
-      when 'KEEP' then @line_keep_empty(n)
+      when 'CLIP'  then @line_strip_empty(n)
+      when 'KEEP'  then @line_keep_empty(n)
 
 
 
@@ -1015,11 +1018,11 @@ global.Grammar = class Grammar
     @all(
       @rep('*',
         @all(
-          [ @indentation_spaces_less_or_equal, n ]
+          @indentation_spaces_less_or_equal(n)
           @rgx(line_break)
         )
       )
-      @rep('?', [ @line_trail_comments, n ])
+      @rep('?', @line_trail_comments(n))
     )
 
 
@@ -1031,8 +1034,8 @@ global.Grammar = class Grammar
 
   line_keep_empty: (n)->
     @all(
-      @rep('*', [ @empty_line, n, "BLOCK-IN" ])
-      @rep('?', [ @line_trail_comments, n ])
+      @rep('*', @empty_line(n, "BLOCK-IN"))
+      @rep('?', @line_trail_comments(n))
     )
 
 
@@ -1046,12 +1049,12 @@ global.Grammar = class Grammar
 
   line_trail_comments: (n)->
     @all(
-      [ @indentation_spaces_less_than, n ]
+      @indentation_spaces_less_than(n)
       @rgx(line_trail_comments)
       @rep('*', @comment_line)
     )
 
-  [  line_trail_comments] = init 'x360', ->
+  [  line_trail_comments] = init ->
     [line_trail_comments] = make ///
       #{comment_content}
       #{line_ending}
@@ -1077,13 +1080,13 @@ global.Grammar = class Grammar
   flow_node: (n, c)->
     @any(
       @alias_node
-      [ @flow_content, n, c ]
+      @flow_content(n, c)
       @all(
-        [ @node_properties, n, c ]
+        @node_properties(n, c)
         @any(
           @all(
-            [ @separation_characters, n, c ]
-            [ @flow_content, n, c ]
+            @separation_characters(n, c)
+            @flow_content(n, c)
           )
           @empty_node
         )
@@ -1099,8 +1102,8 @@ global.Grammar = class Grammar
 
   flow_content: (n, c)->
     @any(
-      [ @flow_yaml_content, n, c ]
-      [ @flow_json_content, n, c ]
+      @flow_yaml_content(n, c)
+      @flow_json_content(n, c)
     )
 
 
@@ -1110,7 +1113,7 @@ global.Grammar = class Grammar
   #   flow-plain-scalar(n,c)
 
   flow_yaml_content: (n, c)->
-    [ @flow_plain_scalar, n, c ]
+    @flow_plain_scalar(n, c)
 
 
 
@@ -1121,12 +1124,19 @@ global.Grammar = class Grammar
   #   | single-quoted-scalar(n,c)
   #   | double-quoted-scalar(n,c)
 
+  [check_flow_json_content] = make ///
+    (= [ \[ { " ' ] )
+  ///
+
   flow_json_content: (n, c)->
-    @any(
-      [ @flow_sequence, n, c ]
-      [ @flow_mapping, n, c ]
-      [ @single_quoted_scalar, n, c ]
-      [ @double_quoted_scalar, n, c ]
+    @all(
+      @rgx(check_flow_json_content)
+      @any(
+        @flow_sequence(n, c)
+        @flow_mapping(n, c)
+        @single_quoted_scalar(n, c)
+        @double_quoted_scalar(n, c)
+      )
     )
 
 
@@ -1144,8 +1154,8 @@ global.Grammar = class Grammar
         @chr('{')
         name: 'flow_mapping_start'
       )
-      @rep('?', [ @separation_characters, n, c ])
-      @rep('?', [ @flow_mapping_context, n, c ])
+      @rep('?', @separation_characters(n, c))
+      @rep('?', @flow_mapping_context(n, c))
       @got(
         @chr('}')
         name: 'flow_mapping_end'
@@ -1166,13 +1176,13 @@ global.Grammar = class Grammar
 
   flow_mapping_entries: (n, c)->
     @all(
-      [ @flow_mapping_entry, n, c ]
-      @rep('?', [ @separation_characters, n, c ])
+      @flow_mapping_entry(n, c)
+      @rep('?', @separation_characters(n, c))
       @rep('?',
         @all(
           @chr(',')
-          @rep('?', [ @separation_characters, n, c ])
-          @rep('?', [ @flow_mapping_entries, n, c ])
+          @rep('?', @separation_characters(n, c))
+          => @rep('?', @flow_mapping_entries(n, c ))
         )
       )
     )
@@ -1293,9 +1303,9 @@ global.Grammar = class Grammar
   flow_mapping_separate_value: (n, c)->
     @all(
       @rgx(///
-        (?:
+        (:
           :
-          (?! #{@non_space_plain_scalar_character(c)} )
+          (! #{@non_space_plain_scalar_character(c)} )
         )
       ///u)
       @any(
@@ -1435,7 +1445,7 @@ global.Grammar = class Grammar
 
   implicit_yaml_key: (c)->
     @all(
-      @max(1024)
+      # @max(1024)
       [ @flow_yaml_node, null, c ]
       @rep('?', @separation_blanks)
     )
@@ -1450,7 +1460,7 @@ global.Grammar = class Grammar
 
   implicit_json_key: (c)->
     @all(
-      @max(1024)
+      # @max(1024)
       [ @flow_json_node, null, c ]
       @rep('?', @separation_blanks)
     )
@@ -1596,11 +1606,11 @@ global.Grammar = class Grammar
   # double-quoted-text(n,FLOW-IN)   ::= double-quoted-multi-line(n)
 
   double_quoted_text: (n, c)->
-    @case c,
-      'BLOCK-KEY': @double_quoted_one_line
-      'FLOW-IN': [ @double_quoted_multi_line, n ]
-      'FLOW-KEY': @double_quoted_one_line
-      'FLOW-OUT': [ @double_quoted_multi_line, n ]
+    switch c
+      when 'BLOCK-KEY' then @double_quoted_one_line
+      when 'FLOW-KEY'  then @double_quoted_one_line
+      when 'FLOW-OUT'  then @double_quoted_multi_line(n)
+      when 'FLOW-IN'   then @double_quoted_multi_line(n)
 
 
 
@@ -1643,7 +1653,7 @@ global.Grammar = class Grammar
 
   double_quoted_first_line: ->
     @rgx(///
-      (?:
+      (:
         #{blank_character}*
         #{non_space_double_quoted_character}
       )*
@@ -1694,9 +1704,9 @@ global.Grammar = class Grammar
   non_space_double_quoted_character: ->
     @rgx(non_space_double_quoted_character)
 
-  [  non_space_double_quoted_character] = init 'x440', ->
+  [  non_space_double_quoted_character] = init ->
     [non_space_double_quoted_character] = make ///
-      (?! #{blank_character})
+      (! #{blank_character})
       #{non_break_double_quoted_character}
     ///
 
@@ -1711,12 +1721,12 @@ global.Grammar = class Grammar
   #       - '"'
   #     )
 
-  [  non_break_double_quoted_character] = init 'x430', ->
+  [  non_break_double_quoted_character] = init ->
     [non_break_double_quoted_character] = make ///
-      (?:
+      (:
         #{double_quoted_scalar_escape_character}
       |
-        (?! [ \\ " ])
+        (! [ \\ " ])
         #{json_character}
       )
     ///
@@ -1751,11 +1761,11 @@ global.Grammar = class Grammar
   # flow-mapping-context(n,FLOW-KEY)  ::= flow-sequence-entries(n,FLOW-KEY)
 
   flow_mapping_context: (n, c)->
-    @case c,
-      'FLOW-OUT': [ @flow_mapping_entries, n, "FLOW-IN" ]
-      'FLOW-IN': [ @flow_mapping_entries, n, "FLOW-IN" ]
-      'BLOCK-KEY': [ @flow_mapping_entries, n, "FLOW-KEY" ]
-      'FLOW-KEY': [ @flow_mapping_entries, n, "FLOW-KEY" ]
+    switch c
+      when 'FLOW-OUT'  then @flow_mapping_entries(n, "FLOW-IN")
+      when 'FLOW-IN'   then @flow_mapping_entries(n, "FLOW-IN")
+      when 'BLOCK-KEY' then @flow_mapping_entries(n, "FLOW-KEY")
+      when 'FLOW-KEY'  then @flow_mapping_entries(n, "FLOW-KEY")
 
 
 
@@ -1766,11 +1776,11 @@ global.Grammar = class Grammar
   # flow-sequence-context(n,FLOW-KEY)  ::= flow-sequence-entries(n,FLOW-KEY)
 
   flow_sequence_context: (n, c)->
-    @case c,
-      'FLOW-OUT': [ @flow_sequence_entries, n, "FLOW-IN" ]
-      'FLOW-IN': [ @flow_sequence_entries, n, "FLOW-IN" ]
-      'BLOCK-KEY': [ @flow_sequence_entries, n, "FLOW-KEY" ]
-      'FLOW-KEY': [ @flow_sequence_entries, n, "FLOW-KEY" ]
+    switch c
+      when 'FLOW-OUT'  then @flow_sequence_entries(n, "FLOW-IN")
+      when 'FLOW-IN'   then @flow_sequence_entries(n, "FLOW-IN")
+      when 'BLOCK-KEY' then @flow_sequence_entries(n, "FLOW-KEY")
+      when 'FLOW-KEY'  then @flow_sequence_entries(n, "FLOW-KEY")
 
 
 
@@ -1798,11 +1808,11 @@ global.Grammar = class Grammar
   # single-quoted-text(FLOW-IN)   ::= single-quoted-multi-line(n)
 
   single_quoted_text: (n, c)->
-    @case c,
-      'BLOCK-KEY': @rgx(single_quoted_one_line)
-      'FLOW-IN': [ @single_quoted_multi_line, n ]
-      'FLOW-KEY': @rgx(single_quoted_one_line)
-      'FLOW-OUT': [ @single_quoted_multi_line, n ]
+    switch c
+      when 'BLOCK-KEY' then @rgx(single_quoted_one_line)
+      when 'FLOW-KEY'  then @rgx(single_quoted_one_line)
+      when 'FLOW-OUT'  then @single_quoted_multi_line(n)
+      when 'FLOW-IN'   then @single_quoted_multi_line(n)
 
 
 
@@ -1829,7 +1839,7 @@ global.Grammar = class Grammar
   # single-quoted-one-line ::=
   #   non-break-single-quoted-character*
 
-  [  single_quoted_one_line] = init 'x400', ->
+  [  single_quoted_one_line] = init ->
     [single_quoted_one_line] = make ///
       #{non_break_single_quoted_character}*
     ///
@@ -1843,9 +1853,9 @@ global.Grammar = class Grammar
   #     non-space-single-quoted-character
   #   )*
 
-  [  single_quoted_first_line] = init 'x410', ->
+  [  single_quoted_first_line] = init ->
     [single_quoted_first_line] = make ///
-      (?:
+      (:
         #{blank_character}*
         #{non_space_single_quoted_character}
       )*
@@ -1865,11 +1875,12 @@ global.Grammar = class Grammar
   #     )
   #   )?
 
-  [  single_quoted_next_line] = init 'x420', ->
+  [  single_quoted_next_line] = init ->
     [single_quoted_next_line] = make ///
       #{non_space_single_quoted_character}
       #{single_quoted_first_line}
     ///
+  , -1
 
   single_quoted_next_line: (n)->
     @all(
@@ -1892,10 +1903,10 @@ global.Grammar = class Grammar
   #     non-break-single-quoted-character
   #   - blank-character
 
-  [  non_space_single_quoted_character] = init 'x390', ->
+  [  non_space_single_quoted_character] = init ->
     [non_space_single_quoted_character] = make ///
-      (?:
-        (?! #{blank_character})
+      (:
+        (! #{blank_character})
         #{non_break_single_quoted_character}
       )
     ///
@@ -1910,12 +1921,12 @@ global.Grammar = class Grammar
   #       - "'"
   #     )
 
-  [  non_break_single_quoted_character] = init 'x380', ->
+  [  non_break_single_quoted_character] = init ->
     [non_break_single_quoted_character] = make ///
-      (?:
+      (:
         #{single_quoted_escaped_single_quote}
-      | (?:
-          (?! ')
+      | (:
+          (! ')
           #{json_character}
         )
       )
@@ -1927,11 +1938,10 @@ global.Grammar = class Grammar
   # single-quoted-escaped-single-quote ::=
   #   "''"
 
-  [  single_quoted_escaped_single_quote] = init 'x370', ->
-    [single_quoted_escaped_single_quote] = make ///
-      '
-      '
-    ///
+  [single_quoted_escaped_single_quote] = make ///
+    '
+    '
+  ///
 
 
 
@@ -1943,11 +1953,12 @@ global.Grammar = class Grammar
 
   flow_plain_scalar: (n, c)->
     @got(
-      @case c,
-        'BLOCK-KEY': [ @plain_scalar_single_line, c ]
-        'FLOW-IN': [ @plain_scalar_multi_line, n, c ]
-        'FLOW-KEY': [ @plain_scalar_single_line, c ]
-        'FLOW-OUT': [ @plain_scalar_multi_line, n, c ]
+      =>
+        switch c
+          when 'FLOW-OUT'  then [ @plain_scalar_multi_line, n, c ]
+          when 'FLOW-IN'   then [ @plain_scalar_multi_line, n, c ]
+          when 'BLOCK-KEY' then [ @plain_scalar_single_line, c ]
+          when 'FLOW-KEY'  then [ @plain_scalar_single_line, c ]
     )
 
 
@@ -1959,8 +1970,8 @@ global.Grammar = class Grammar
 
   plain_scalar_multi_line: (n, c)->
     @all(
-      [ @plain_scalar_single_line, c ]
-      @rep('*', [ @plain_scalar_next_line, n, c ])
+      @plain_scalar_single_line(c)
+      @rep('*', @plain_scalar_next_line(n, c))
     )
 
 
@@ -1972,8 +1983,8 @@ global.Grammar = class Grammar
 
   plain_scalar_single_line: (c)->
     @all(
-      [ @plain_scalar_first_character, c ]
-      [ @plain_scalar_line_characters, c ]
+      @plain_scalar_first_character(c)
+      @plain_scalar_line_characters(c)
     )
 
 
@@ -1986,9 +1997,9 @@ global.Grammar = class Grammar
 
   plain_scalar_next_line: (n, c)->
     @all(
-      [ @flow_folded_whitespace, n ]
-      [ @plain_scalar_characters, c ]
-      [ @plain_scalar_line_characters, c ]
+      @flow_folded_whitespace(n)
+      @plain_scalar_characters(c)
+      @plain_scalar_line_characters(c)
     )
 
 
@@ -2002,7 +2013,7 @@ global.Grammar = class Grammar
 
   plain_scalar_line_characters: (c)->
     @rgx(///
-      (?:
+      (:
         #{blank_character}*
         #{@plain_scalar_characters_re(c)}
       )*
@@ -2041,8 +2052,8 @@ global.Grammar = class Grammar
 
   plain_scalar_first_character: (c)->
     @rgx(///
-      (?:
-        (?!
+      (:
+        (!
           [
             -
             ?
@@ -2066,13 +2077,13 @@ global.Grammar = class Grammar
           ]
         )
         #{non_space_character}
-      | (?:
+      | (:
           [
             ?
             :
             -
           ]
-          (?= #{@non_space_plain_scalar_character(c)} )
+          (= #{@non_space_plain_scalar_character(c)} )
         )
       )
     ///u)
@@ -2098,18 +2109,18 @@ global.Grammar = class Grammar
   plain_scalar_characters_re: (c)->
     non_space_plain_scalar_character = @non_space_plain_scalar_character(c)
     [plain_scalar_characters] = make ///
-      (?:
-        (?:
-          (?! [ : \x23 ] )
+      (:
+        (:
+          (! [ : \x23 ] )
           #{non_space_plain_scalar_character}
         )
-      | (?:
-          (?<= #{non_space_character} )
+      | (:
+          (<= #{non_space_character} )
           \x23
         )
-      | (?:
+      | (:
           :
-          (?= #{non_space_plain_scalar_character} )
+          (= #{non_space_plain_scalar_character} )
         )
       )
     ///u
@@ -2128,10 +2139,10 @@ global.Grammar = class Grammar
 
   non_space_plain_scalar_character: (c)->
     switch c
-      when 'BLOCK-KEY' then @block_plain_scalar_character()
-      when 'FLOW-IN'   then @flow_plain_scalar_character()
-      when 'FLOW-KEY'  then @flow_plain_scalar_character()
       when 'FLOW-OUT'  then @block_plain_scalar_character()
+      when 'FLOW-IN'   then @flow_plain_scalar_character()
+      when 'BLOCK-KEY' then @block_plain_scalar_character()
+      when 'FLOW-KEY'  then @flow_plain_scalar_character()
 
 
 
@@ -2141,7 +2152,7 @@ global.Grammar = class Grammar
 
   block_plain_scalar_character: ->
     [re] = make ///
-      (?: #{non_space_character} )
+      (: #{non_space_character} )
     ///u
     re
 
@@ -2154,8 +2165,8 @@ global.Grammar = class Grammar
 
   flow_plain_scalar_character: ->
     [re] = make ///
-      (?:
-        (?!
+      (:
+        (!
           #{flow_collection_indicator}
         )
         #{non_space_character}
@@ -2204,6 +2215,9 @@ global.Grammar = class Grammar
 
   # When n≥0
 
+  indentation_spaces_n = memoize (n)->
+    String(/// (: #{space_character}{#{n}} ) ///y)[1..-3]
+
   indentation_spaces_n: (n)->
     @rgx(/// #{space_character}{#{n}} ///)
 
@@ -2244,11 +2258,11 @@ global.Grammar = class Grammar
   # line-prefix-spaces(n,FLOW-IN)   ::= indentation-spaces-plus-maybe-more(n)
 
   line_prefix_spaces: (n, c)->
-    @case c,
-      'BLOCK-IN': [ @indentation_spaces_exact, n ]
-      'BLOCK-OUT': [ @indentation_spaces_exact, n ]
-      'FLOW-IN': [ @indentation_spaces_plus_maybe_more, n ]
-      'FLOW-OUT': [ @indentation_spaces_plus_maybe_more, n ]
+    switch c
+      when 'BLOCK-OUT' then @indentation_spaces_exact(n)
+      when 'BLOCK-IN'  then @indentation_spaces_exact(n)
+      when 'FLOW-OUT'  then @indentation_spaces_plus_maybe_more(n)
+      when 'FLOW-IN'   then @indentation_spaces_plus_maybe_more(n)
 
 
 
@@ -2266,11 +2280,15 @@ global.Grammar = class Grammar
   #   indentation-spaces(n)
   #   separation-blanks?
 
+  indentation_spaces_plus_maybe_more = memoize (n)->
+    [re] = make ///
+      #{indentation_spaces_n(n)}
+      #{separation_blanks}?
+    ///
+    re
+
   indentation_spaces_plus_maybe_more: (n)->
-    @all(
-      @indentation_spaces_n(n)
-      @rep('?', @separation_blanks)
-    )
+    @rgx(indentation_spaces_plus_maybe_more(n))
 
 
 
@@ -2282,9 +2300,9 @@ global.Grammar = class Grammar
 
   flow_folded_whitespace: (n)->
     @all(
-      @rep('?', @separation_blanks)
-      [ @folded_whitespace, n, "FLOW-IN" ]
-      [ @indentation_spaces_plus_maybe_more, n ]
+      @rgx(/// #{separation_blanks}? ///)
+      @folded_whitespace(n, "FLOW-IN")
+      @indentation_spaces_plus_maybe_more(n)
     )
 
 
@@ -2301,7 +2319,7 @@ global.Grammar = class Grammar
     @any(
       @all(
         @rgx(line_break)
-        @rep('+', [ @empty_line, n, c ])
+        @rep('+', @empty_line(n, c))
       )
       @rgx(break_as_space)
     )
@@ -2319,9 +2337,9 @@ global.Grammar = class Grammar
   comment_lines: ->
     @rgx(comment_lines)
 
-  [   comment_lines] = init 'x352', ->
+  [   comment_lines] = init ->
      [comment_lines] = make ///
-       (?:
+       (:
          #{comment_line}
        | #{start_of_line}
        )
@@ -2341,10 +2359,10 @@ global.Grammar = class Grammar
   comment_line: ->
     @rgx(comment_line)
 
-  [   comment_line] = init 'x351', ->
+  [   comment_line] = init ->
      [comment_line] = make ///
-       (?:
-         (?:
+       (:
+         (:
            #{separation_blanks}
            #{comment_content}?
          )?
@@ -2363,9 +2381,9 @@ global.Grammar = class Grammar
   blanks_and_comment_line: ->
     @rgx(blanks_and_comment_line)
 
-  [  blanks_and_comment_line] = init 'x350', ->
+  [  blanks_and_comment_line] = init ->
     [blanks_and_comment_line] = make ///
-      (?:
+      (:
         #{separation_blanks}
         #{comment_content}?
         #{line_ending}
@@ -2379,9 +2397,9 @@ global.Grammar = class Grammar
   #   '#'
   #   non-break-character*
 
-  [  comment_content] = init 'x340', ->
+  [  comment_content] = init ->
     [comment_content] = make ///
-      (?:
+      (:
         \x23
         #{non_break_character}*
       )
@@ -2403,7 +2421,7 @@ global.Grammar = class Grammar
       @all(
         @any(
           [ @line_prefix_spaces, n, c ]
-          [ @indentation_spaces_less_than, n ]
+          @indentation_spaces_less_than(n)
         )
         @rgx(break_as_line_feed)
       )
@@ -2420,13 +2438,13 @@ global.Grammar = class Grammar
   # separation-characters(n,FLOW-KEY)  ::= separation-blanks
 
   separation_characters: (n, c)->
-    @case c,
-      'BLOCK-IN': [ @separation_lines, n ]
-      'BLOCK-KEY': @separation_blanks()
-      'BLOCK-OUT': [ @separation_lines, n ]
-      'FLOW-IN': [ @separation_lines, n ]
-      'FLOW-KEY': @separation_blanks()
-      'FLOW-OUT': [ @separation_lines, n ]
+    switch c
+      when 'BLOCK-OUT' then @separation_lines(n)
+      when 'BLOCK-IN'  then @separation_lines(n)
+      when 'FLOW-OUT'  then @separation_lines(n)
+      when 'FLOW-IN'   then @separation_lines(n)
+      when 'BLOCK-KEY' then @separation_blanks()
+      when 'FLOW-KEY'  then @separation_blanks()
 
 
 
@@ -2439,13 +2457,16 @@ global.Grammar = class Grammar
   #   | separation-blanks
 
   separation_lines: (n)->
-    @any(
-      @all(
-        @comment_lines
-        [ @indentation_spaces_plus_maybe_more, n ]
+    @rgx(///
+      (:
+        (:
+          #{comment_lines}
+          #{indentation_spaces_plus_maybe_more(n)}
+        )
+      | #{separation_blanks}
       )
-      @separation_blanks
-    )
+    ///u)
+
 
 
   # [123]
@@ -2453,8 +2474,8 @@ global.Grammar = class Grammar
   #     blank-character+
   #   | <start-of-line>
 
-  [  separation_blanks] = init 'x210', ->
-    [separation_blanks] = make ///(?:
+  [  separation_blanks] = init ->
+    [separation_blanks] = make ///(:
         #{blank_character}+
       | #{start_of_line}
     )///
@@ -2473,7 +2494,7 @@ global.Grammar = class Grammar
   yaml_directive_line: ->
     @all(
       @rgx(///
-        (?:
+        (:
           Y A M L
           #{separation_blanks}
         )
@@ -2511,7 +2532,7 @@ global.Grammar = class Grammar
   reserved_directive_line: ->
     @rgx(///
       #{directive_name}
-      (?:
+      (:
         #{separation_blanks}
         #{directive_parameter}
       )*
@@ -2523,7 +2544,7 @@ global.Grammar = class Grammar
   # directive-name ::=
   #   non-space-character+
 
-  [  directive_name] = init 'x330', ->
+  [  directive_name] = init ->
     [directive_name] = make ///
       #{non_space_character}+
     ///u
@@ -2534,7 +2555,7 @@ global.Grammar = class Grammar
   # directive-parameter ::=
   #   non-space-character+
 
-  [  directive_parameter] = init 'x320', ->
+  [  directive_parameter] = init ->
     [directive_parameter] = make ///
       #{non_space_character}+
     ///u
@@ -2568,9 +2589,9 @@ global.Grammar = class Grammar
   #   | secondary-tag-handle
   #   | primary-tag-handle
 
-  [  tag_handle] = init 'x250', ->
+  [  tag_handle] = init ->
     [tag_handle] = make ///
-      (?:
+      (:
         #{named_tag_handle}
       | #{secondary_tag_handle}
       | #{primary_tag_handle}
@@ -2590,7 +2611,7 @@ global.Grammar = class Grammar
   #   word-character+
   #   '!'
 
-  [  named_tag_handle] = init 'x240', ->
+  [  named_tag_handle] = init ->
     [named_tag_handle] = make ///
       !
       #{word_character}+
@@ -2603,8 +2624,7 @@ global.Grammar = class Grammar
   # secondary-tag-handle ::=
   #   "!!"
 
-  [ secondary_tag_handle] = init 'x230', ->
-    secondary_tag_handle  = "!!"
+  secondary_tag_handle  = "!!"
 
 
 
@@ -2612,8 +2632,7 @@ global.Grammar = class Grammar
   # primary-tag-handle ::=
   #   '!'
 
-  [ primary_tag_handle] = init 'x220', ->
-    primary_tag_handle  = "!"
+  primary_tag_handle  = "!"
 
 
 
@@ -2625,7 +2644,7 @@ global.Grammar = class Grammar
   tag_prefix: ->
     @got(
       @rgx(///
-        (?:
+        (:
           #{local_tag_prefix}
         | #{global_tag_prefix}
         )
@@ -2639,7 +2658,7 @@ global.Grammar = class Grammar
   #   '!'
   #   uri-character*
 
-  [  local_tag_prefix] = init 'x260', ->
+  [  local_tag_prefix] = init ->
     [local_tag_prefix] = make ///
       !
       #{uri_character}*
@@ -2652,7 +2671,7 @@ global.Grammar = class Grammar
   #   tag-character
   #   uri-character*
 
-  [  global_tag_prefix] = init 'x270', ->
+  [  global_tag_prefix] = init ->
     [global_tag_prefix] = make ///
       #{tag_character}
       #{uri_character}*
@@ -2677,30 +2696,33 @@ global.Grammar = class Grammar
   #       )?
   #     )
 
-  check_node_properties = /// [ ! & ] ///y
+  [check_node_properties] = make ///
+    (= [ ! & ] )
+  ///
+
   check_node_properties: ->
-    check_node_properties.lastIndex = @pos
-    !! @input.match(check_node_properties)
+    @rgx(check_node_properties)
 
   node_properties: (n, c)->
-    return false unless @check_node_properties()
-
-    @any(
-      @all(
-        @tag_property
-        @rep('?',
-          @all(
-            [ @separation_characters, n, c ]
-            @anchor_property
+    @all(
+      @check_node_properties
+      @any(
+        @all(
+          @tag_property
+          @rep('?',
+            @all(
+              @separation_characters(n, c)
+              @anchor_property
+            )
           )
         )
-      )
-      @all(
-        @anchor_property
-        @rep('?',
-          @all(
-            [ @separation_characters, n, c ]
-            @tag_property
+        @all(
+          @anchor_property
+          @rep('?',
+            @all(
+              @separation_characters(n, c)
+              @tag_property
+            )
           )
         )
       )
@@ -2727,12 +2749,13 @@ global.Grammar = class Grammar
   # anchor-name ::=
   #   anchor-character+
 
-  [  anchor_name] = init 'x310', ->
+  [  anchor_name] = init ->
     [anchor_name] = make ///
-      (?:
+      (:
         #{anchor_character}
       )+
     ///u
+  , -4
 
 
 
@@ -2741,15 +2764,16 @@ global.Grammar = class Grammar
   #     non-space-character
   #   - flow-collection-indicators
 
-  [  anchor_character] = init 'x300', ->
+  [  anchor_character] = init ->
     [anchor_character] = make ///
-      (?:
-        (?!
+      (:
+        (!
           #{flow_collection_indicator}
         )
         #{non_space_character}
       )+
     ///u
+  , -4
 
 
 
@@ -2776,12 +2800,13 @@ global.Grammar = class Grammar
   #   uri-character+
   #   '>'
 
-  [  verbatim_tag] = init 'x280', ->
+  [  verbatim_tag] = init ->
     [verbatim_tag] = make ///
       ! <
         #{uri_character}+
       >
     ///
+  , -4
 
 
 
@@ -2790,11 +2815,12 @@ global.Grammar = class Grammar
   #   tag-handle
   #   tag-character+
 
-  [  shorthand_tag] = init 'x290', ->
+  [  shorthand_tag] = init ->
     [shorthand_tag] = make ///
       #{tag_handle}
       #{tag_character}+
     ///
+  , -4
 
 
 
@@ -2810,11 +2836,7 @@ global.Grammar = class Grammar
   # byte-order-mark ::=
   #   xFEFF
 
-  byte_order_mark: ->
-    @rgx(/// #{byte_order_mark} ///)
-
-  [ byte_order_mark] = init 'x030', ->
-    byte_order_mark  = "\u{FEFF}"
+  byte_order_mark  = "\u{FEFF}"
 
 
 
@@ -2831,19 +2853,18 @@ global.Grammar = class Grammar
   #   | [xE000-xFFFD]                   # Additional unicode areas
   #   | [x010000-x10FFFF]               # 32 bit
 
-  [  yaml_character] = init 'x010', ->
-    [yaml_character] = make ///
-      [
-        \x09
-        \x0A
-        \x0D
-        \x20-\x7E
-        \x85
-        \xA0-\uD7FF
-        \uE000-\uFFFD
-        \u{10000}-\u{10FFFF}
-      ]
-    ///u
+  [yaml_character] = make ///
+    [
+      \x09
+      \x0A
+      \x0D
+      \x20-\x7E
+      \x85
+      \xA0-\uD7FF
+      \uE000-\uFFFD
+      \u{10000}-\u{10FFFF}
+    ]
+  ///u
 
 
 
@@ -2852,13 +2873,12 @@ global.Grammar = class Grammar
   #     x09                             # Tab
   #   | [x20-x10FFFF]                   # Non-C0-control characters
 
-  [  json_character] = init 'x020', ->
-    [json_character] = make ///
-      [
-        \x09
-        \x20-\u{10FFFF}
-      ]
-    ///u
+  [json_character] = make ///
+    [
+      \x09
+      \x20-\u{10FFFF}
+    ]
+  ///u
 
 
 
@@ -2867,10 +2887,10 @@ global.Grammar = class Grammar
   #     non-break-character
   #   - blank-character
 
-  [  non_space_character] = init 'x120', ->
+  [  non_space_character] = init ->
     [non_space_character] = make ///
-      (?:
-        (?!
+      (:
+        (!
           #{blank_character}
         )
         #{non_break_character}
@@ -2886,19 +2906,18 @@ global.Grammar = class Grammar
   #   - x0D
   #   - byte-order-mark
 
-  [  non_break_character] = init 'x110', ->
-    [non_break_character] = make ///
-      (?:
-        (?!
-          [
-            \x0A
-            \x0D
-            #{byte_order_mark}
-          ]
-        )
-        #{yaml_character}
+  [non_break_character] = make ///
+    (:
+      (!
+        [
+          \x0A
+          \x0D
+          #{byte_order_mark}
+        ]
       )
-    ///u
+      #{yaml_character}
+    )
+  ///u
 
 
 
@@ -2907,7 +2926,7 @@ global.Grammar = class Grammar
   #     x20                             # Space
   #   | x09                             # Tab
 
-  [  blank_character, ws_lookahead] = init 'x100', ->
+  [  blank_character, ws_lookahead] = init ->
     [blank_character] = make ///
       [
         #{space_character}
@@ -2916,7 +2935,7 @@ global.Grammar = class Grammar
     ///
 
     [ws_lookahead] = make ///
-      (?=
+      (=
         #{end_of_input}
       | #{blank_character}
       | #{line_break}
@@ -2932,8 +2951,7 @@ global.Grammar = class Grammar
   # space-character ::=
   #   x20
 
-  [ space_character] = init 'x090', ->
-    space_character  = "\x20"
+  space_character  = "\x20"
 
 
 
@@ -2942,9 +2960,9 @@ global.Grammar = class Grammar
   #     line-break
   #   | <end-of-input>
 
-  [  line_ending] = init 'x200', ->
+  [  line_ending] = init ->
     [line_ending] = make ///
-      (?:
+      (:
         #{line_break}
       | #{end_of_input}
       )
@@ -2956,7 +2974,7 @@ global.Grammar = class Grammar
   # break-as-space ::=
   #   line-break
 
-  [ break_as_space] = init 'x190', ->
+  [ break_as_space] = init ->
     break_as_space  = line_break
 
 
@@ -2965,7 +2983,7 @@ global.Grammar = class Grammar
   # break-as-line-feed ::=
   #   line-break
 
-  [ break_as_line_feed] = init 'x060', ->
+  [ break_as_line_feed] = init ->
     break_as_line_feed  = line_break
 
 
@@ -2979,17 +2997,16 @@ global.Grammar = class Grammar
   #   | x0D
   #   | x0A
 
-  [  line_break] = init 'x050', ->
-    [line_break] = make ///
-      (?:
-        (?:
-          \x0D
-          \x0A
-        )
-      | \x0D
-      | \x0A
+  [line_break] = make ///
+    (:
+      (:
+        \x0D
+        \x0A
       )
-    ///
+    | \x0D
+    | \x0A
+    )
+  ///
 
 
 
@@ -3005,16 +3022,15 @@ global.Grammar = class Grammar
   # c-flow-indicator ::=
   #   ',' | '[' | ']' | '{' | '}'
 
-  [  flow_collection_indicator, flow_collection_indicator_s] = init 'x040', ->
-    [flow_collection_indicator, flow_collection_indicator_s] = make ///
+  [flow_collection_indicator, flow_collection_indicator_s] = make ///
+    [
+      ,
       [
-        ,
-        [
-        \]
-        {
-        }
-      ]
-    ///
+      \]
+      {
+      }
+    ]
+  ///
 
 
 
@@ -3044,10 +3060,10 @@ global.Grammar = class Grammar
   #     | ( 'U' hexadecimal-digit{8} )
   #   )
 
-  [  double_quoted_scalar_escape_character] = init 'x180', ->
+  [  double_quoted_scalar_escape_character] = init ->
     [double_quoted_scalar_escape_character] = make ///
       \\
-      (?:
+      (:
         [
           0
           a
@@ -3082,10 +3098,10 @@ global.Grammar = class Grammar
   #   - '!'
   #   - flow-collection-indicators
 
-  [  tag_character] = init 'x170', ->
+  [  tag_character] = init ->
     [tag_character] = make ///
-      (?:
-        (?!
+      (:
+        (!
           [
             !
             #{flow_collection_indicator_s}
@@ -3126,9 +3142,9 @@ global.Grammar = class Grammar
   #   | '['
   #   | ']'
 
-  [  uri_character] = init 'x160', ->
+  [  uri_character] = init ->
     [uri_character] = make ///
-      (?:
+      (:
         % #{hexadecimal_digit}{2}
       | [
           #{word_character_s}
@@ -3165,7 +3181,7 @@ global.Grammar = class Grammar
   #   | ascii-alpha-character
   #   | '-'
 
-  [  word_character, word_character_s] = init 'x150', ->
+  [  word_character, word_character_s] = init ->
     [word_character, word_character_s] = make ///
       [
         #{decimal_digit_s}
@@ -3182,7 +3198,7 @@ global.Grammar = class Grammar
   #   | [x41-x46]                       # A-F
   #   | [x61-x66]                       # a-f
 
-  [  hexadecimal_digit] = init 'x130', ->
+  [  hexadecimal_digit] = init ->
     [hexadecimal_digit] = make ///
       [
         #{decimal_digit_s}
@@ -3197,12 +3213,11 @@ global.Grammar = class Grammar
   # decimal-digit ::=
   #   [x30-x39]                         # 0-9
 
-  [  decimal_digit, decimal_digit_s] = init 'x070', ->
-    [decimal_digit, decimal_digit_s] = make ///
-      [
-        0 - 9
-      ]
-    ///
+  [decimal_digit, decimal_digit_s] = make ///
+    [
+      0 - 9
+    ]
+  ///
 
 
 
@@ -3210,12 +3225,11 @@ global.Grammar = class Grammar
   # decimal-digit-1-9 ::=
   #   [x31-x39]                         # 0-9
 
-  [  decimal_digit_1_9] = init 'x080', ->
-    [decimal_digit_1_9] = make ///
-      [
-        0 - 9
-      ]
-    ///
+  [decimal_digit_1_9] = make ///
+    [
+      0 - 9
+    ]
+  ///
 
 
 
@@ -3224,16 +3238,15 @@ global.Grammar = class Grammar
   #     [x41-x5A]                       # A-Z
   #   | [x61-x7A]                       # a-z
 
-  [    ascii_alpha_character_s] = init 'x140', ->
-    [, ascii_alpha_character_s] = make ///
-      [
-        A - Z
-        a - z
-      ]
-    ///
+  [, ascii_alpha_character_s] = make ///
+    [
+      A - Z
+      a - z
+    ]
+  ///
 
 
   # Call the variable initialization functions in the order needed for
   # JavaScript to be correct.
-  inits[id]() for id in Object.keys(inits).sort()
+  init() for init in inits.reverse()
 

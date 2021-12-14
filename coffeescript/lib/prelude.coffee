@@ -2,6 +2,8 @@ require 'ingy-prelude'
 
 global.ENV = process.env
 
+global.memoize = require('moize').maxSize(50)
+
 global.name_ = (name, func, trace)->
   func.trace = trace || name
   if ENV.DEBUGXXX   # Not working yet
@@ -70,7 +72,7 @@ global.dump = (o)->
 
 global.FAIL = (o...)->
   WWW o
-  die "FAIL '#{o[0] || '???'}'"
+  die_ "FAIL '#{o[0] || '???'}'"
 
 global.timer = (start=null)->
   if start?
