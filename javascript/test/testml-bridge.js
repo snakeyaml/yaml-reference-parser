@@ -33,7 +33,7 @@
       if (error) {
         return error;
       } else {
-        return parser.receiver.output();
+        return parser.receiver.output;
       }
     }
 

@@ -27,10 +27,9 @@
     folded: '>'
   };
 
-  global.TestReceiver = TestReceiver = class TestReceiver extends Receiver {
-    output() {
-      var list;
-      list = this.event.map(function(e) {
+  global.TestReceiver = TestReceiver = (function() {
+    class TestReceiver extends Receiver {
+      receive(e) {
         var event, style, type, value;
         type = event_map[e.event];
         event = [type];
@@ -60,12 +59,16 @@
           value = e.value.replace(/\\/g, '\\\\').replace(/\x08/g, '\\b').replace(/\t/g, '\\t').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
           event.push(`${style}${value}`);
         }
-        return event.join(' ') + "\n";
-      });
-      return list.join('');
-    }
+        return this.output += event.join(' ') + "\n";
+      }
 
-  };
+    };
+
+    TestReceiver.prototype.output = '';
+
+    return TestReceiver;
+
+  }).call(this);
 
   // vim: sw=2:
 

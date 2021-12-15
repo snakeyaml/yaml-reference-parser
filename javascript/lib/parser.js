@@ -4,18 +4,18 @@
   This is a parser class. It has a parse() method and parsing primitives for the
   grammar. It calls methods in the receiver class, when a rule matches:
   */
-  var DEBUG, Parser, TRACE,
+  var DEBUG, Parser, STATS, TRACE,
     indexOf = [].indexOf;
 
   require('./prelude');
 
   require('./grammar');
 
-  TRACE = Boolean(ENV.TRACE);
-
   DEBUG = Boolean(ENV.DEBUG);
 
-  global.calls = {};
+  TRACE = Boolean(ENV.TRACE);
+
+  STATS = Boolean(ENV.STATS);
 
   global.Parser = Parser = (function() {
     var make;
@@ -28,8 +28,8 @@
         this.pos = 0;
         this.end = 0;
         this.state = [];
-        if (TRACE) {
-          this.call = this.call_trace;
+        if (DEBUG || TRACE || STATS) {
+          this.call = this.call_debug;
           this.trace_num = 0;
           this.trace_line = 0;
           this.trace_on = true;
@@ -130,10 +130,10 @@
         return value;
       }
 
-      // To make the 'call' method as fast as possible, a tracing version of it is
-      // here. The 'do =>' blocks contain the tracing code, to stand out visually.
-      call_trace(func) {
-        var args, trace, value;
+      // To make the 'call' method as fast as possible, a debugging version of it
+      // is here.
+      call_debug(func) {
+        var args, base, trace, value;
         if (func instanceof Array) {
           [func, ...args] = func;
         } else {
@@ -146,14 +146,16 @@
         })();
         this.state_push(func.name);
         trace = func.trace != null ? func.trace : func.trace = func.name;
-        (() => {
-          if (calls[trace] == null) {
-            calls[trace] = 0;
+        if (STATS) {
+          if ((base = this.stats.calls)[trace] == null) {
+            base[trace] = 0;
           }
-          calls[trace]++;
+          this.stats.calls[trace]++;
+        }
+        if (TRACE) {
           this.trace_num++;
-          return this.trace('?', trace, args);
-        })();
+          this.trace('?', trace, args);
+        }
         args = args.map(function(a) {
           if (typeof a === 'function') {
             return a();
@@ -161,23 +163,21 @@
             return a;
           }
         });
-        (() => {
-          if (DEBUG && func.name.match(/_\w/)) {
-            return debug_rule(func.name, ...args);
-          }
-        })();
+        if (DEBUG && func.name.match(/_\w/)) {
+          debug_rule(func.name, ...args);
+        }
         value = func.apply(this, args);
         while (typeof value === 'function' || value instanceof Array) {
           value = this.call(value);
         }
-        (() => {
+        if (TRACE) {
           this.trace_num++;
           if (value) {
-            return this.trace('+', trace);
+            this.trace('+', trace);
           } else {
-            return this.trace('x', trace);
+            this.trace('x', trace);
           }
-        })();
+        }
         this.state_pop();
         return value;
       }
@@ -691,6 +691,10 @@
         }
       }
 
+    };
+
+    Parser.prototype.stats = {
+      calls: {}
     };
 
     make = memoize(function(regex) {

@@ -22,7 +22,7 @@ class TestMLBridge extends TestML.Bridge
     if error
       error
     else
-      parser.receiver.output()
+      parser.receiver.output
 
   unescape: (text)->
     text = text

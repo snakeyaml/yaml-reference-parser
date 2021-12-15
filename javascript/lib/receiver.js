@@ -85,8 +85,8 @@
     }
 
     send(event) {
-      if (this.callback) {
-        return this.callback(event);
+      if (this.receive) {
+        return this.receive(event);
       } else {
         return this.event.push(event);
       }

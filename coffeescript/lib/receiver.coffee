@@ -37,8 +37,8 @@ global.Receiver = class Receiver
     @cache = []
 
   send: (event)->
-    if @callback
-      @callback event
+    if @receive
+      @receive event
     else
       @event.push event
 
