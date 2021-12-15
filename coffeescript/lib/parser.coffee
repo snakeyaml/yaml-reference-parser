@@ -6,12 +6,14 @@ grammar. It calls methods in the receiver class, when a rule matches:
 require './prelude'
 require './grammar'
 
-TRACE = Boolean ENV.TRACE
 DEBUG = Boolean ENV.DEBUG
-
-global.calls = {}
+TRACE = Boolean ENV.TRACE
+STATS = Boolean ENV.STATS
 
 global.Parser = class Parser extends Grammar
+
+  stats:
+    calls: {}
 
   constructor: (receiver)->
     super()
@@ -21,8 +23,8 @@ global.Parser = class Parser extends Grammar
     @end = 0
     @state = []
 
-    if TRACE
-      @call = @call_trace
+    if DEBUG or TRACE or STATS
+      @call = @call_debug
       @trace_num = 0
       @trace_line = 0
       @trace_on = true
@@ -105,9 +107,9 @@ global.Parser = class Parser extends Grammar
 
     return value
 
-  # To make the 'call' method as fast as possible, a tracing version of it is
-  # here. The 'do =>' blocks contain the tracing code, to stand out visually.
-  call_trace: (func)->
+  # To make the 'call' method as fast as possible, a debugging version of it
+  # is here.
+  call_debug: (func)->
     if func instanceof Array
       [func, args...] = func
     else
@@ -120,10 +122,11 @@ global.Parser = class Parser extends Grammar
     @state_push(func.name)
 
     trace = func.trace ?= func.name
-    do =>
-      calls[trace] ?= 0
-      calls[trace]++
+    if STATS
+      @stats.calls[trace] ?= 0
+      @stats.calls[trace]++
 
+    if TRACE
       @trace_num++
       @trace '?', trace, args
 
@@ -133,15 +136,14 @@ global.Parser = class Parser extends Grammar
       else
         a
 
-    do =>
-      if DEBUG && func.name.match /_\w/
-        debug_rule func.name, args...
+    if DEBUG && func.name.match /_\w/
+      debug_rule func.name, args...
 
     value = func.apply(@, args)
     while typeof(value) == 'function' or value instanceof Array
       value = @call value
 
-    do =>
+    if TRACE
       @trace_num++
       if value
         @trace '+', trace

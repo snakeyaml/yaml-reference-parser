@@ -11,7 +11,7 @@
   require('../lib/test-receiver');
 
   main = function(yaml = file_read('-')) {
-    var e, i, k, len, n, parser, pass, ref, sorted, start, time;
+    var calls, e, i, k, len, n, parser, pass, ref, sorted, start, time;
     parser = new Parser(new TestReceiver());
     pass = true;
     start = timer();
@@ -29,8 +29,9 @@
       n = '';
       yaml = yaml.replace(/\n$/, '\\n');
     }
-    if (process.env.TRACE) {
+    if (process.env.STATS) {
       sorted = {};
+      ({calls} = parser.stats);
       ref = Object.keys(calls).sort(function(a, b) {
         return calls[a] - calls[b];
       });

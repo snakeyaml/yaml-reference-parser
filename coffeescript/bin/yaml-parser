@@ -25,8 +25,9 @@ main = (yaml=file_read('-'))->
     n = ''
     yaml = yaml.replace /\n$/, '\\n'
 
-  if process.env.TRACE
+  if process.env.STATS
     sorted = {}
+    {calls} = parser.stats
     for k in Object.keys(calls).sort((a,b)-> calls[a] - calls[b])
       sorted[k] = calls[k]
     WWW sorted
